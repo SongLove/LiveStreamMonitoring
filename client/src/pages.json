@@ -1,0 +1,91 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^wd-(.*)": "wot-design-uni/components/wd-$1/wd-$1.vue"
+    }
+  },
+  "pages": [
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "主播监控",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/media/index",
+      "style": {
+        "navigationBarTitleText": "传媒监控",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/replay/index",
+      "style": {
+        "navigationBarTitleText": "直播回放",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationBarTitleText": "功能设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/help/index",
+      "style": {
+        "navigationBarTitleText": "帮助中心",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "pages-sub",
+      "pages": [
+        {
+          "path": "anchor/add",
+          "style": { "navigationBarTitleText": "添加主播" }
+        },
+        {
+          "path": "anchor/detail",
+          "style": { "navigationBarTitleText": "主播详情" }
+        },
+        {
+          "path": "category/manage",
+          "style": { "navigationBarTitleText": "分类管理" }
+        },
+        {
+          "path": "notify/logs",
+          "style": { "navigationBarTitleText": "推送记录" }
+        },
+        {
+          "path": "quota/guide",
+          "style": { "navigationBarTitleText": "增加推送次数" }
+        },
+        {
+          "path": "square/index",
+          "style": { "navigationBarTitleText": "主播广场" }
+        }
+      ]
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#ecfdf5",
+    "backgroundColor": "#ecfdf5"
+  }
+}

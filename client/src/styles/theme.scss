@@ -1,0 +1,103 @@
+$primary: #16a34a;
+$primary-light: #dcfce7;
+$primary-dark: #15803d;
+$page-bg: linear-gradient(180deg, #ecfdf5 0%, #f8fafc 40%);
+$card-bg: #ffffff;
+$text-primary: #0f172a;
+$text-secondary: #64748b;
+$text-muted: #94a3b8;
+$warning-bg: #fff7ed;
+$warning-border: #fed7aa;
+$warning-text: #c2410c;
+$live-green: #16a34a;
+$radius-lg: 24rpx;
+$radius-md: 16rpx;
+$shadow-card: 0 8rpx 32rpx rgba(15, 23, 42, 0.06);
+
+@mixin card {
+  background: $card-bg;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-card;
+}
+
+.page-wrap {
+  min-height: 100vh;
+  padding: 24rpx 32rpx 180rpx;
+  box-sizing: border-box;
+}
+
+.page-title {
+  font-size: 56rpx;
+  font-weight: 800;
+  color: $text-primary;
+  margin-bottom: 32rpx;
+}
+
+.section-card {
+  @include card;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.section-title {
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.badge-pill {
+  background: $primary-light;
+  color: $primary-dark;
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  border: none;
+  height: 96rpx;
+  line-height: 96rpx;
+}
+
+.btn-primary::after {
+  border: none;
+}
+
+.empty-wrap {
+  text-align: center;
+  padding: 80rpx 40rpx;
+  color: $text-secondary;
+}
+
+.live-tag {
+  color: $live-green;
+  font-size: 24rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  background: $live-green;
+  border-radius: 50%;
+}
+
+.offline-tag {
+  color: $text-muted;
+  font-size: 24rpx;
+}

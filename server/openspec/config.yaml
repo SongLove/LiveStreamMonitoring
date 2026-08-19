@@ -1,0 +1,17 @@
+schema: spec-driven
+
+context: |
+  Scope: LiveStreamMonitoring Server only (this directory is the OpenSpec root).
+  Tech stack: NestJS + Mongoose + MongoDB + Redis + BullMQ; Docker Compose; API + Worker dual entry.
+  Domain: 主播开播监控 — 微信一次性订阅额度、全局主播池、平台 Provider 探测、推送校验链。
+  Principles: Server is sole authority for quota/live state/subscriptions; prefer third-party (BullMQ, Bull Board, TikHub, holiday calendar); runtime live/quota decisions must NOT call LLMs.
+  PRD: ./主播开播监控服务端 PRD：Server 端.md
+
+operations:
+  apply:
+    guidance:
+      - Implement only under server/; do not invent Client/Admin UI work unless a task explicitly requires API contracts.
+      - Prefer Nest official integrations and documented third-party providers; do not replace BullMQ or invent queue dashboards.
+  archive:
+    guidance:
+      - Summarize archive outcome briefly before finishing.

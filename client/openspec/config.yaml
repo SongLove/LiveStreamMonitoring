@@ -1,0 +1,19 @@
+schema: spec-driven
+
+context: |
+  Scope: LiveStreamMonitoring Client only (this directory is the OpenSpec root).
+  Tech stack: uni-app + Vue3 + TypeScript + unibest 脚手架 + @wot-ui/ui (Wot UI v2) + Pinia。
+  Domain: 主播开播监控微信小程序 — 展示 Server 权威数据、引导一次性订阅授权、DIY 分类、帮助排障。
+  Principles: Client 不探测开播、不发放额度、不直连平台 API；优先 unibest/wot-ui/微信官方能力，不自研 UI 框架与请求栈。
+  PRD: ./主播开播监控微信小程序 PRD：Client 端.md
+  关联: ../主播开播监控小程序技术规划.md、../server/ Server API
+
+operations:
+  apply:
+    guidance:
+      - Implement only under client/; Server 接口契约以 server/openspec 与 /api/v1 为准。
+      - 使用 unibest 约定式路由、内置请求封装与 Pinia；禁止自研等价脚手架或 UI 组件库。
+      - 运行时禁止 LLM 判定开播/额度；wx.requestSubscribeMessage 仅用户主动点击触发。
+  archive:
+    guidance:
+      - Summarize archive outcome briefly before finishing.

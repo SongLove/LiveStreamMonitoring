@@ -1,0 +1,47 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    # 若 USTC 等镜像源 502/EOF，可临时去掉 Docker Desktop → Settings → Docker Engine 里的 registry-mirrors 后重试
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    command: node dist/main.api.js
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      WORKER_MODE: "false"
+      API_PORT: "4000"
+      MONGODB_URI: mongodb://mongo:27017/livestream
+      REDIS_HOST: redis
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongo
+      - redis
+
+  worker:
+    build: .
+    command: node dist/main.worker.js
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      WORKER_MODE: "true"
+      MONGODB_URI: mongodb://mongo:27017/livestream
+      REDIS_HOST: redis
+    depends_on:
+      - mongo
+      - redis
+
+volumes:
+  mongo_data:
