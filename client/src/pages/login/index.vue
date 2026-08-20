@@ -62,7 +62,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .login-page {
-  min-height: 100%;
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -72,7 +74,7 @@ onMounted(() => {
 }
 .hero {
   text-align: center;
-  margin-bottom: 120rpx;
+  margin-bottom: 80rpx;
 }
 .title {
   display: block;

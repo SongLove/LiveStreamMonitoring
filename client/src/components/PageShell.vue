@@ -65,6 +65,8 @@ const statusBarStyle = computed(() => ({
   min-height: 100vh;
   box-sizing: border-box;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .status-bar-fill {
@@ -78,6 +80,10 @@ const statusBarStyle = computed(() => ({
 }
 
 .page-shell__body {
+  flex: 1;
   width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 </style>
