@@ -16,8 +16,16 @@ export function isLive(state?: AnchorLiveState) {
   return state === 'live' || state === 'pending_confirm'
 }
 
-export function platformIdLabel(platform: string, uid: string) {
-  return platform === 'douyin' ? `抖音号: ${uid}` : `UID: ${uid}`
+export function platformIdLabel(
+  platform: string,
+  platformUid: string,
+  roomId?: string,
+) {
+  // 抖音：展示用抖音号（roomId/unique_id），platformUid 是 sec_uid 稳定主键
+  if (platform === 'douyin') {
+    return `抖音号: ${roomId || platformUid}`
+  }
+  return `UID: ${platformUid}`
 }
 
 export function clearLocalCache() {

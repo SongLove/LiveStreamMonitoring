@@ -28,6 +28,9 @@ export default () => ({
   douyin: {
     thirdPartyBaseUrl: process.env.DOUYIN_THIRD_PARTY_BASE_URL || '',
     thirdPartyApiKey: process.env.DOUYIN_THIRD_PARTY_API_KEY || '',
+    playwrightTimeoutMs: parseInt(process.env.DOUYIN_PW_TIMEOUT_MS || '20000', 10),
+    playwrightConcurrency: parseInt(process.env.DOUYIN_PW_CONCURRENCY || '1', 10),
+    playwrightHeadless: process.env.DOUYIN_PW_HEADLESS !== 'false',
   },
   admin: {
     bootstrapUsername: process.env.ADMIN_BOOTSTRAP_USERNAME || 'admin',

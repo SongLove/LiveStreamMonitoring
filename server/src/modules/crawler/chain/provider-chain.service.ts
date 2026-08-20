@@ -1,5 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { LiveProvider, NormalizedLiveResult, Platform } from '../providers/provider.types';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  LiveProvider,
+  NormalizedAnchorProfile,
+  NormalizedLiveResult,
+  Platform,
+} from '../providers/provider.types';
+import { isProviderSkippedError } from '../providers/provider-skip.error';
 
 interface CircuitState {
   failures: number;
@@ -29,6 +35,37 @@ export class ProviderChainService {
     if (openUntil) this.logger.warn(`Circuit open for ${name}`);
   }
 
+  /** Profile resolve: third-party → signature → playwright. Skip does not trip circuit. */
+  async resolveChain(
+    providers: LiveProvider[],
+    input: string,
+  ): Promise<NormalizedAnchorProfile> {
+    let lastError: Error | undefined;
+    for (const p of providers) {
+      if (this.isOpen(p.name)) {
+        this.logger.debug(`resolve skip open circuit: ${p.name}`);
+        continue;
+      }
+      try {
+        const profile = await p.resolve(input);
+        this.recordSuccess(p.name);
+        return profile;
+      } catch (e) {
+        if (isProviderSkippedError(e)) {
+          this.logger.debug(e.message);
+          continue;
+        }
+        lastError = e as Error;
+        this.recordFailure(p.name);
+        this.logger.warn(`${p.name} resolve failed: ${lastError.message}`);
+      }
+    }
+    if (lastError instanceof BadRequestException) throw lastError;
+    throw new BadRequestException(
+      lastError?.message || '拉取抖音资料失败，请稍后重试',
+    );
+  }
+
   async executeChain(
     providers: LiveProvider[],
     uids: string[],
@@ -45,6 +82,10 @@ export class ProviderChainService {
         this.recordSuccess(p.name);
         return { results, allFailed: false };
       } catch (e) {
+        if (isProviderSkippedError(e)) {
+          this.logger.debug((e as Error).message);
+          continue;
+        }
         this.recordFailure(p.name);
         this.logger.warn(`${p.name} failed: ${(e as Error).message}`);
       }

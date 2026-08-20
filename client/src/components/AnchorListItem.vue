@@ -15,7 +15,7 @@ defineEmits<{ toggle: [id: string, enabled: boolean]; tap: [anchorId: string] }>
     <image class="avatar" :src="item.anchor?.avatarUrl || ''" mode="aspectFill" />
     <view class="info">
       <text class="name">{{ item.anchor?.nickname || '加载中...' }}</text>
-      <text class="uid">{{ platformIdLabel(item.anchor?.platform || 'douyin', item.anchor?.platformUid || '') }}</text>
+      <text class="uid">{{ platformIdLabel(item.anchor?.platform || 'douyin', item.anchor?.platformUid || '', item.anchor?.roomId) }}</text>
     </view>
     <view class="right">
       <view v-if="isLive(item.anchor?.liveState)" class="live-tag">

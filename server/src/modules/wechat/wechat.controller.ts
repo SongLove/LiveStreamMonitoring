@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -7,11 +8,17 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { WechatService } from './wechat.service';
+import { JwtClientGuard } from '../../common/guards/jwt-client.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('微信回调')
 @Controller('api/v1/wechat')
 export class WechatController {
-  constructor(private readonly wechatService: WechatService) {}
+  constructor(
+    private readonly wechatService: WechatService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Get('callback')
   @ApiOperation({
@@ -53,5 +60,38 @@ export class WechatController {
       await this.wechatService.handleSubscribeCallback(body);
     }
     return { ok: true };
+  }
+
+  /**
+   * 本地开发：WECHAT_APPID 未配置时，无法收到微信服务器推送。
+   * 仅 mock 模式允许 Client 上报 accept 以走同一套 grant 账本。
+   */
+  @Post('mock-subscribe-accept')
+  @ApiBearerAuth('client-jwt')
+  @UseGuards(JwtClientGuard)
+  @ApiOperation({
+    summary: '（仅本地 mock）模拟订阅授权到账',
+    description:
+      '仅当未配置 WECHAT_APPID 时可用；生产环境禁止。额度仍走 grantFromWechatCallback。',
+  })
+  @ApiResponse({ status: 201, description: '模拟发放结果' })
+  async mockSubscribeAccept(
+    @CurrentUser() user: { userId: string },
+    @Body() body: { templateId?: string; status?: string },
+  ) {
+    if (!this.wechatService.isMockMode()) {
+      throw new ForbiddenException(
+        '已配置 WECHAT_APPID：额度只能由微信服务器回调发放',
+      );
+    }
+    const status = String(body?.status || 'accept').toLowerCase();
+    if (status !== 'accept') {
+      return { granted: false, reason: status, balance: null };
+    }
+    const templateId =
+      body?.templateId ||
+      this.config.get<string>('wechat.subscribeTemplateId') ||
+      'TMPL_LIVE_NOTIFY';
+    return this.wechatService.mockGrantAccept(user.userId, templateId);
   }
 }

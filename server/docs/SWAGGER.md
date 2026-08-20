@@ -14,6 +14,8 @@
 ```bash
 cd server
 cp .env.example .env
+# 抖音资料兜底（未配 TikHub 时）
+npx playwright install chromium
 docker compose up -d mongo redis
 npm run start:api:dev
 ```

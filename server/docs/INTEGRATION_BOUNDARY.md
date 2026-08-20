@@ -15,7 +15,7 @@
 | 日志 | nestjs-pino | App modules | ✅ |
 | 节假日 | 第三方日历 API | `NotifyService.getHolidayDays` | ✅ |
 | 微信 | 官方 HTTPS | `wechat/` | ✅ |
-| 抖音状态 | 第三方优先 + stub 降级 | `crawler/providers/` | ✅ |
+| 抖音状态 | 第三方优先 + Playwright 资料兜底 | `crawler/providers/` | ✅ |
 
 ## 运行时禁止 LLM
 

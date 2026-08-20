@@ -34,7 +34,8 @@ onLoad(async () => {
       <text class="rules-title">授权说明</text>
       <text class="rules-item">· 微信一次性订阅：每次授权可累积 1 次下发权限</text>
       <text class="rules-item">· 不支持批量勾选多次，需连续点击授权</text>
-      <text class="rules-item">· 额度以服务端为准，授权后自动刷新</text>
+      <text class="rules-item">· 额度以服务端为准；正式环境靠微信回调到账</text>
+      <text class="rules-item">· 本地未配微信 AppId 时，授权后由 mock 接口模拟到账</text>
       <text class="rules-item">· 不承诺绝对送达，受微信与网络影响</text>
     </view>
 

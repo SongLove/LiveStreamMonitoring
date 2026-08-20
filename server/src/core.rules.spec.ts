@@ -123,7 +123,22 @@ describe('quota grant only via callback helper', () => {
 
 describe('douyin input parse', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { parseDouyinInput, assertStableDouyinUid } = require('./modules/crawler/providers/douyin-input');
+  const {
+    parseDouyinInput,
+    assertStableDouyinUid,
+    looksLikeDouyinUserId,
+    isDouyinUniqueId,
+  } = require('./modules/crawler/providers/douyin-input');
+
+  it('accepts douyin unique_id like kelie329157', () => {
+    expect(isDouyinUniqueId('kelie329157')).toBe(true);
+    expect(looksLikeDouyinUserId('kelie329157')).toBe(true);
+    expect(parseDouyinInput('kelie329157')).toEqual({
+      kind: 'user_id',
+      userId: 'kelie329157',
+      idType: 'unique_id',
+    });
+  });
 
   it('extracts keyword from jingxuan search URL', () => {
     const url =
@@ -137,13 +152,21 @@ describe('douyin input parse', () => {
   it('parses user profile sec_uid', () => {
     const url = 'https://www.douyin.com/user/MS4wLjABAAAA_abc123xyz';
     expect(parseDouyinInput(url)).toEqual({
-      kind: 'sec_uid',
-      secUid: 'MS4wLjABAAAA_abc123xyz',
+      kind: 'user_id',
+      userId: 'MS4wLjABAAAA_abc123xyz',
+      idType: 'sec_uid',
     });
   });
 
   it('rejects chinese nickname as platformUid', () => {
     expect(() => assertStableDouyinUid('麻辣毛蛋')).toThrow();
     expect(() => assertStableDouyinUid('%E9%BA%BB?type=user')).toThrow();
+  });
+
+  it('classifies plain nickname as search_keyword (product rejects later)', () => {
+    expect(parseDouyinInput('麻辣毛蛋')).toEqual({
+      kind: 'search_keyword',
+      keyword: '麻辣毛蛋',
+    });
   });
 });

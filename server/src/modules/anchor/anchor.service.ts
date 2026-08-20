@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Anchor, AnchorDocument, Platform } from './anchor.schema';
+import { looksLikeDouyinUserId } from '../crawler/providers/douyin-input';
+import { isIncompleteDouyinProfile } from '../crawler/providers/douyin-playwright.provider';
 import { CrawlerService } from '../crawler/crawler.service';
 
 @Injectable()
@@ -21,17 +23,42 @@ export class AnchorService {
     const q = keyword.trim();
     if (!q) return [];
 
-    // 抖音搜索页 URL → 提取关键词
+    // 抖音：按用户 ID（抖音号，如 kelie329157）搜索
     let query = q;
     if (platform === 'douyin') {
-      const m = q.match(/douyin\.com\/(?:jingxuan\/)?search\/([^?&#/]+)/i);
-      if (m) {
+      const userUrl = q.match(/douyin\.com\/user\/([^?&#/]+)/i);
+      if (userUrl) {
         try {
-          query = decodeURIComponent(m[1]).trim();
+          query = decodeURIComponent(userUrl[1]).trim();
         } catch {
-          query = m[1];
+          query = userUrl[1];
         }
+      } else if (/douyin\.com\/(?:jingxuan\/)?search\//i.test(q)) {
+        throw new BadRequestException(
+          '请输入抖音号（用户 ID，如 kelie329157），不要使用搜索页链接。',
+        );
       }
+
+      if (!looksLikeDouyinUserId(query)) {
+        throw new BadRequestException(
+          '请输入抖音号（如 kelie329157），不支持按昵称搜索。',
+        );
+      }
+
+      const local = await this.anchorModel
+        .find({
+          platform: 'douyin',
+          $or: [{ platformUid: query }, { roomId: query }],
+        })
+        .limit(5)
+        .lean();
+
+      // 完整资料可直接返回；占位（昵称=抖音号且无头像）必须重新 resolve
+      const complete = local.filter((d) => !isIncompleteDouyinProfile(d));
+      if (complete.length > 0) return complete;
+
+      const doc = await this.resolve('douyin', query);
+      return [doc.toObject()];
     }
 
     const local = await this.anchorModel
@@ -48,27 +75,11 @@ export class AnchorService {
 
     if (local.length > 0) return local;
 
-    // 本地未命中：走 Provider 外部搜索（抖音需第三方）
-    const remote = await this.crawler.searchUsers(platform, query);
-    const saved: unknown[] = [];
-    for (const r of remote.slice(0, 20)) {
-      const doc = await this.anchorModel.findOneAndUpdate(
-        { platform: r.platform, platformUid: r.platformUid },
-        {
-          $set: {
-            nickname: r.nickname,
-            avatarUrl: r.avatarUrl,
-            profileUrl: r.profileUrl,
-            roomId: r.roomId || '',
-            status: 'active',
-          },
-          $setOnInsert: { pollTier: 2, liveState: 'offline' },
-        },
-        { upsert: true, new: true },
-      );
-      saved.push(doc.toObject());
+    if (/^\d+$/.test(query)) {
+      const doc = await this.resolve('bilibili', query);
+      return [doc.toObject()];
     }
-    return saved;
+    return [];
   }
 
   async resolve(platform: Platform, input: string) {
@@ -81,7 +92,7 @@ export class AnchorService {
         resolved.platformUid.includes('?'))
     ) {
       throw new BadRequestException(
-        '抖音解析未得到稳定 sec_uid，请配置第三方搜索或粘贴用户主页链接',
+        '抖音用户 ID 无效，请输入抖音号（如 kelie329157）',
       );
     }
     const doc = await this.anchorModel.findOneAndUpdate(
@@ -98,6 +109,20 @@ export class AnchorService {
       },
       { upsert: true, new: true },
     );
+
+    // 清理历史占位：曾用抖音号当 platformUid 的假记录
+    if (
+      platform === 'douyin' &&
+      resolved.roomId &&
+      resolved.platformUid !== resolved.roomId
+    ) {
+      await this.anchorModel.deleteMany({
+        platform: 'douyin',
+        platformUid: resolved.roomId,
+        _id: { $ne: doc._id },
+      });
+    }
+
     return doc;
   }
 

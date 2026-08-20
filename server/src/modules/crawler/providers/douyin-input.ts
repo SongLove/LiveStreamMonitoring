@@ -2,13 +2,36 @@ import { BadRequestException } from '@nestjs/common';
 
 export type DouyinInputKind =
   | { kind: 'search_keyword'; keyword: string }
-  | { kind: 'sec_uid'; secUid: string }
+  | { kind: 'user_id'; userId: string; idType: 'unique_id' | 'sec_uid' }
   | { kind: 'live_id'; liveId: string }
   | { kind: 'share_text'; text: string };
 
 /**
- * 解析用户粘贴的抖音输入：关键词、用户页、直播间、搜索页 URL。
- * 搜索页 URL（如 jingxuan/search/麻辣毛蛋?type=user）只能当关键词搜索，不能当 platformUid。
+ * 抖音号（用户展示 ID）例如 kelie329157 —— 用户日常说的「用户 ID」。
+ * sec_uid（MS4wLjABAAAA...）是内部稳定主键，主页链接里常见，也接受。
+ */
+export function isDouyinUniqueId(raw: string): boolean {
+  const s = (raw || '').trim();
+  // 排除明显的 sec_uid
+  if (/^MS4wLjABAAAA/i.test(s)) return false;
+  // 抖音号：字母数字下划线/点，长度 3~30，不允许中文与空格
+  return /^[a-zA-Z0-9._]{3,30}$/.test(s);
+}
+
+export function isDouyinSecUid(raw: string): boolean {
+  const s = (raw || '').trim();
+  return /^MS4wLjABAAAA[A-Za-z0-9_-]+$/i.test(s) || /^[A-Za-z0-9_-]{24,}$/.test(s);
+}
+
+/** 是否可作为抖音「用户 ID」输入（抖音号或 sec_uid） */
+export function looksLikeDouyinUserId(raw: string): boolean {
+  const s = (raw || '').trim();
+  return isDouyinUniqueId(s) || isDouyinSecUid(s);
+}
+
+/**
+ * 解析用户粘贴的抖音输入。
+ * 优先识别抖音号（如 kelie329157）与主页链接中的 ID。
  */
 export function parseDouyinInput(raw: string): DouyinInputKind {
   const input = (raw || '').trim();
@@ -16,7 +39,7 @@ export function parseDouyinInput(raw: string): DouyinInputKind {
     throw new BadRequestException('抖音输入不能为空');
   }
 
-  // 搜索页：/jingxuan/search/<keyword>?type=user 或 /search/<keyword>
+  // 搜索页不能当用户 ID
   const searchMatch = input.match(
     /douyin\.com\/(?:jingxuan\/)?search\/([^?&#/]+)/i,
   );
@@ -26,30 +49,37 @@ export function parseDouyinInput(raw: string): DouyinInputKind {
     return { kind: 'search_keyword', keyword };
   }
 
-  // 用户主页：/user/<sec_uid>
+  // 用户主页：/user/<id> —— 可能是 sec_uid，也可能是其它路径段
   const userMatch = input.match(/douyin\.com\/user\/([^?&#/]+)/i);
   if (userMatch) {
-    const secUid = safeDecode(userMatch[1]);
-    if (!secUid || secUid.includes('?') || secUid.includes('%')) {
+    const id = safeDecode(userMatch[1]);
+    if (!id || id.includes('?') || id.includes('%') || /[\u4e00-\u9fff]/.test(id)) {
       throw new BadRequestException('无效的抖音用户链接');
     }
-    return { kind: 'sec_uid', secUid };
+    if (isDouyinSecUid(id)) {
+      return { kind: 'user_id', userId: id, idType: 'sec_uid' };
+    }
+    if (isDouyinUniqueId(id)) {
+      return { kind: 'user_id', userId: id, idType: 'unique_id' };
+    }
+    // 其它较长 token 仍当用户 ID 收下
+    return { kind: 'user_id', userId: id, idType: 'sec_uid' };
   }
 
-  // 直播间：live.douyin.com/<id>
   const liveMatch = input.match(/live\.douyin\.com\/([^?&#/]+)/i);
   if (liveMatch) {
     return { kind: 'live_id', liveId: safeDecode(liveMatch[1]) };
   }
 
-  // 分享文案里可能夹短链
   if (/v\.douyin\.com|douyin\.com/i.test(input) && /\s/.test(input)) {
     return { kind: 'share_text', text: input };
   }
 
-  // 纯关键词 / 抖音号 / sec_uid
-  if (/^MS4wLjABAAAA/i.test(input) || /^[A-Za-z0-9_-]{20,}$/.test(input)) {
-    return { kind: 'sec_uid', secUid: input };
+  if (isDouyinSecUid(input)) {
+    return { kind: 'user_id', userId: input, idType: 'sec_uid' };
+  }
+  if (isDouyinUniqueId(input)) {
+    return { kind: 'user_id', userId: input, idType: 'unique_id' };
   }
 
   return { kind: 'search_keyword', keyword: input };
@@ -63,11 +93,15 @@ function safeDecode(s: string): string {
   }
 }
 
-/** 禁止把搜索关键词伪造成 platformUid 入库 */
-export function assertStableDouyinUid(uid: string): void {
-  if (!uid || uid.includes('?') || uid.includes('%') || /[\u4e00-\u9fff]/.test(uid)) {
+export function assertDouyinUserId(uid: string): void {
+  if (!looksLikeDouyinUserId(uid)) {
     throw new BadRequestException(
-      '无法解析稳定的抖音用户 ID（sec_uid）。请配置第三方搜索，或粘贴用户主页链接。',
+      '无效的抖音用户 ID。请输入抖音号（如 kelie329157），不支持昵称。',
     );
   }
+}
+
+/** @deprecated 使用 assertDouyinUserId */
+export function assertStableDouyinUid(uid: string): void {
+  assertDouyinUserId(uid);
 }

@@ -15,8 +15,10 @@ export class CrawlerService {
   ) {}
 
   async resolve(platform: Platform, input: string) {
-    const provider = this.registry.primary(platform);
-    return provider.resolve(input);
+    if (platform === 'bilibili') {
+      return this.registry.primary(platform).resolve(input);
+    }
+    return this.chain.resolveChain(this.registry.chain(platform), input);
   }
 
   /** 平台用户搜索（本地未命中时由 AnchorService 调用） */

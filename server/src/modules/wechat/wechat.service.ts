@@ -89,6 +89,19 @@ export class WechatService {
     return { processed };
   }
 
+  /** 本地 mock：无微信推送时，用 JWT 用户直接走同一 grant 账本 */
+  async mockGrantAccept(userId: string, templateId: string) {
+    await this.userService.setTemplateAuth(userId, templateId, 'accept');
+    const idempotencyKey = `grant:mock:${userId}:${templateId}:${Date.now()}`;
+    const result = await this.quotaService.grantFromWechatCallback({
+      userId,
+      templateId,
+      idempotencyKey,
+      meta: { source: 'mock_subscribe_accept' },
+    });
+    return result;
+  }
+
   async handleNotifyResultCallback(body: any): Promise<void> {
     const list = normalizeWechatList(body?.List || body?.list || body);
     for (const item of list) {

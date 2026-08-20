@@ -3,7 +3,7 @@ import { LiveProvider, Platform } from './providers/provider.types';
 import { BilibiliProvider } from './providers/bilibili.provider';
 import { DouyinThirdPartyProvider } from './providers/douyin-third-party.provider';
 import { DouyinSignatureStubProvider } from './providers/douyin-signature.stub';
-import { DouyinPlaywrightStubProvider } from './providers/douyin-playwright.stub';
+import { DouyinPlaywrightProvider } from './providers/douyin-playwright.provider';
 
 @Injectable()
 export class ProviderRegistry {
@@ -11,7 +11,7 @@ export class ProviderRegistry {
     private readonly bilibili: BilibiliProvider,
     private readonly douyinThird: DouyinThirdPartyProvider,
     private readonly douyinSign: DouyinSignatureStubProvider,
-    private readonly douyinPw: DouyinPlaywrightStubProvider,
+    private readonly douyinPw: DouyinPlaywrightProvider,
   ) {}
 
   primary(platform: Platform): LiveProvider {
@@ -19,7 +19,7 @@ export class ProviderRegistry {
     return this.douyinThird;
   }
 
-  /** Douyin: third-party → signature stub → playwright stub */
+  /** Douyin: third-party → signature stub → playwright */
   chain(platform: Platform): LiveProvider[] {
     if (platform === 'bilibili') return [this.bilibili];
     return [this.douyinThird, this.douyinSign, this.douyinPw];

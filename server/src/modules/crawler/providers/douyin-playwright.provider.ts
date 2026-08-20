@@ -1,0 +1,257 @@
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import type { Page } from 'playwright';
+import {
+  LiveProvider,
+  NormalizedAnchorProfile,
+  NormalizedLiveResult,
+} from './provider.types';
+import { assertDouyinUserId, parseDouyinInput } from './douyin-input';
+import { DouyinBrowserPool } from './douyin-browser.pool';
+import {
+  extractUserFromJson,
+  parseDouyinProfileFromHtml,
+  ParsedDouyinBits,
+  toNormalizedProfile,
+} from './douyin-profile-parse';
+import { ProviderSkippedError } from './provider-skip.error';
+
+/**
+ * Douyin profile via Playwright (nickname + avatar). Live status not implemented this round.
+ *
+ * unique_id 策略：
+ * 1) 优先打开 https://www.douyin.com/search/{id}?type=user
+ * 2) 搜索页无结果（风控/空壳）时降级 https://live.douyin.com/{id}
+ *    （实测 webcast/room/web/enter 可返回昵称+头像+sec_uid）
+ */
+@Injectable()
+export class DouyinPlaywrightProvider implements LiveProvider {
+  readonly name = 'douyin-playwright';
+  readonly platform = 'douyin' as const;
+  private readonly logger = new Logger(DouyinPlaywrightProvider.name);
+
+  constructor(private readonly pool: DouyinBrowserPool) {}
+
+  async healthCheck() {
+    try {
+      await import('playwright');
+      return { ok: true, detail: 'playwright available' };
+    } catch (e) {
+      return { ok: false, detail: (e as Error).message };
+    }
+  }
+
+  async resolve(input: string): Promise<NormalizedAnchorProfile> {
+    const parsed = parseDouyinInput(input);
+
+    if (parsed.kind === 'search_keyword') {
+      throw new BadRequestException(
+        '请输入抖音号（用户 ID，如 kelie329157），不支持昵称或搜索页链接。',
+      );
+    }
+    if (parsed.kind === 'live_id') {
+      throw new BadRequestException(
+        '请使用抖音号（用户 ID）添加，暂不支持仅凭直播间号。',
+      );
+    }
+    if (parsed.kind === 'share_text') {
+      const urlInText = input.match(/https?:\/\/[^\s]+/i)?.[0];
+      if (urlInText) return this.resolve(urlInText);
+      throw new BadRequestException('无法识别输入。请填写抖音号，例如 kelie329157。');
+    }
+
+    assertDouyinUserId(parsed.userId);
+    return this.fetchViaBrowser(parsed.userId, parsed.idType);
+  }
+
+  private async fetchViaBrowser(
+    id: string,
+    idType: 'unique_id' | 'sec_uid',
+  ): Promise<NormalizedAnchorProfile> {
+    try {
+      return await this.pool.withPage(async (page) => {
+        const captured: unknown[] = [];
+        this.attachCapture(page, captured);
+
+        if (idType === 'sec_uid') {
+          await page.goto(`https://www.douyin.com/user/${id}`, {
+            waitUntil: 'domcontentloaded',
+          });
+          await sleep(3000);
+          const found = this.pickFromCaptured(captured, id, idType);
+          if (found) return toNormalizedProfile(found, id);
+          const html = await page.content();
+          const fromHtml = parseDouyinProfileFromHtml(html, id);
+          if (fromHtml?.nickname) return toNormalizedProfile(fromHtml, id);
+          throw new BadRequestException(`未找到该抖音用户：${id}`);
+        }
+
+        // 1) 产品约定：用户搜索页
+        const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(id)}?type=user`;
+        this.logger.debug(`playwright open search ${searchUrl}`);
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
+        await sleep(3500);
+
+        let found = this.pickFromCaptured(captured, id, idType);
+        if (found) return toNormalizedProfile(found, id);
+
+        const searchHtml = await page.content();
+        const fromSearchHtml = parseDouyinProfileFromHtml(searchHtml, id);
+        if (
+          fromSearchHtml?.nickname &&
+          this.matchesTarget(fromSearchHtml, id, idType)
+        ) {
+          return toNormalizedProfile(fromSearchHtml, id);
+        }
+
+        // 真实用户主页链接（排除 /user/self）
+        const profileHref = await this.findRealUserHref(page);
+        if (profileHref) {
+          const abs = profileHref.startsWith('http')
+            ? profileHref
+            : `https://www.douyin.com${profileHref}`;
+          this.logger.debug(`playwright open user card ${abs}`);
+          await page.goto(abs, { waitUntil: 'domcontentloaded' });
+          await sleep(2500);
+          found = this.pickFromCaptured(captured, id, idType);
+          if (found) return toNormalizedProfile(found, id);
+          const profileHtml = await page.content();
+          const bits = parseDouyinProfileFromHtml(profileHtml, id);
+          if (bits?.nickname && this.matchesTarget(bits, id, idType)) {
+            return toNormalizedProfile(bits, id);
+          }
+        }
+
+        // 2) 搜索页空壳时：直播间页可按抖音号解析（含已下播）
+        const liveUrl = `https://live.douyin.com/${encodeURIComponent(id)}`;
+        this.logger.debug(`playwright fallback live ${liveUrl}`);
+        await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
+        await sleep(4000);
+        found = this.pickFromCaptured(captured, id, idType);
+        if (found) return toNormalizedProfile(found, id);
+
+        const liveHtml = await page.content();
+        const fromLiveHtml = parseDouyinProfileFromHtml(liveHtml, id);
+        if (fromLiveHtml?.nickname) {
+          return toNormalizedProfile(fromLiveHtml, id);
+        }
+
+        // 标题兜底：`克烈的抖音直播间 - 抖音直播`
+        const title = await page.title();
+        const titleNick = title.match(/^(.+?)的抖音直播间/)?.[1]?.trim();
+        if (titleNick && titleNick !== id) {
+          return toNormalizedProfile(
+            {
+              nickname: titleNick,
+              avatarUrl: '',
+              secUid: '',
+              uniqueId: id,
+            },
+            id,
+          );
+        }
+
+        throw new BadRequestException(`未找到抖音号：${id}`);
+      });
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      const msg = (e as Error).message || 'unknown';
+      this.logger.error(`playwright resolve failed: ${msg}`);
+      throw new BadRequestException(`拉取抖音资料失败，请稍后重试`);
+    }
+  }
+
+  private attachCapture(page: Page, captured: unknown[]) {
+    page.on('response', async (res) => {
+      try {
+        const url = res.url();
+        if (!/douyin\.com|iesdouyin\.com/i.test(url)) return;
+        if (!/user|profile|search|web\/|aweme|webcast|room/i.test(url)) return;
+        const ct = res.headers()['content-type'] || '';
+        if (!ct.includes('json') && !ct.includes('javascript')) return;
+        const data = await res.json().catch(() => null);
+        if (data) captured.push(data);
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  private pickFromCaptured(
+    captured: unknown[],
+    id: string,
+    idType: 'unique_id' | 'sec_uid',
+  ): ParsedDouyinBits | null {
+    for (const payload of captured) {
+      const bits = extractUserFromJson(payload, id);
+      if (bits?.nickname && this.matchesTarget(bits, id, idType)) {
+        return bits;
+      }
+    }
+    for (const payload of captured) {
+      const bits = extractUserFromJson(payload, id);
+      if (
+        bits?.nickname &&
+        idType === 'unique_id' &&
+        bits.uniqueId.toLowerCase() === id.toLowerCase()
+      ) {
+        return bits;
+      }
+    }
+    return null;
+  }
+
+  private async findRealUserHref(page: Page): Promise<string | null> {
+    const hrefs = await page.evaluate(() =>
+      [...document.querySelectorAll('a[href*="/user/"]')]
+        .map((a) => a.getAttribute('href') || '')
+        .filter(Boolean),
+    );
+    const real = hrefs.find(
+      (h) =>
+        /\/user\/[^/?#]+/i.test(h) &&
+        !/\/user\/self\b/i.test(h) &&
+        !/\/user\/login\b/i.test(h),
+    );
+    return real || null;
+  }
+
+  private matchesTarget(
+    bits: { uniqueId: string; secUid: string },
+    id: string,
+    idType: 'unique_id' | 'sec_uid',
+  ): boolean {
+    if (idType === 'sec_uid') {
+      return !bits.secUid || bits.secUid === id;
+    }
+    return (
+      !bits.uniqueId || bits.uniqueId.toLowerCase() === id.toLowerCase()
+    );
+  }
+
+  async fetchStatus(_uids: string[]): Promise<NormalizedLiveResult[]> {
+    throw new ProviderSkippedError(
+      this.name,
+      'playwright live status not implemented',
+    );
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** 占位资料：昵称≈抖音号且无头像（历史假解析） */
+export function isIncompleteDouyinProfile(doc: {
+  nickname?: string;
+  avatarUrl?: string;
+  platformUid?: string;
+  roomId?: string;
+}): boolean {
+  const nick = (doc.nickname || '').trim();
+  const avatar = (doc.avatarUrl || '').trim();
+  const uid = (doc.platformUid || '').trim();
+  const room = (doc.roomId || '').trim();
+  if (avatar) return false;
+  if (!nick) return true;
+  return nick === uid || nick === room;
+}

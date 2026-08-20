@@ -4,6 +4,7 @@ import {
   NormalizedAnchorProfile,
   NormalizedLiveResult,
 } from './provider.types';
+import { ProviderSkippedError } from './provider-skip.error';
 
 /** V1.1 skeleton — signature direct adapter (not used as V1 primary). */
 @Injectable()
@@ -16,12 +17,12 @@ export class DouyinSignatureStubProvider implements LiveProvider {
     return { ok: false, detail: 'signature stub not implemented (V1.1)' };
   }
 
-  async resolve(input: string): Promise<NormalizedAnchorProfile> {
-    throw new Error('Douyin signature provider not implemented');
+  async resolve(_input: string): Promise<NormalizedAnchorProfile> {
+    throw new ProviderSkippedError(this.name, 'signature not implemented');
   }
 
   async fetchStatus(_uids: string[]): Promise<NormalizedLiveResult[]> {
     this.logger.warn('signature stub invoked');
-    throw new Error('Douyin signature provider not implemented');
+    throw new ProviderSkippedError(this.name, 'signature not implemented');
   }
 }

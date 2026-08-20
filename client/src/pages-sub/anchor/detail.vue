@@ -71,7 +71,7 @@ onLoad((query) => {
     <view v-if="anchor" class="section-card profile">
       <image class="avatar" :src="anchor.avatarUrl" mode="aspectFill" />
       <text class="name">{{ anchor.nickname }}</text>
-      <text class="uid">{{ platformIdLabel(anchor.platform, anchor.platformUid) }}</text>
+      <text class="uid">{{ platformIdLabel(anchor.platform, anchor.platformUid, anchor.roomId) }}</text>
       <view class="status-row">
         <text :class="isLive(anchor.liveState) ? 'live' : 'offline'">{{ liveStateLabel(anchor.liveState) }}</text>
         <text v-if="anchor.lastPolledAt" class="updated">数据可能延迟</text>

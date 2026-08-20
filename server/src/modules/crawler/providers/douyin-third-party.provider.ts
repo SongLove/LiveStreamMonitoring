@@ -6,8 +6,14 @@ import {
   NormalizedAnchorProfile,
   NormalizedLiveResult,
 } from './provider.types';
-import { assertStableDouyinUid, parseDouyinInput } from './douyin-input';
+import { assertDouyinUserId, parseDouyinInput } from './douyin-input';
+import { ProviderSkippedError } from './provider-skip.error';
 
+/**
+ * 抖音资料解析：按抖音号 / sec_uid 拉取真实昵称、头像。
+ * 资料接口：TikHub GET /api/v1/douyin/web/handler_user_profile_v2?unique_id=
+ * @see https://docs.tikhub.io/232379586e0
+ */
 @Injectable()
 export class DouyinThirdPartyProvider implements LiveProvider {
   readonly name = 'douyin-third-party';
@@ -28,6 +34,15 @@ export class DouyinThirdPartyProvider implements LiveProvider {
     return Boolean(this.base && this.apiKey);
   }
 
+  private requireConfiguredOrSkip(action: string) {
+    if (!this.configured) {
+      throw new ProviderSkippedError(
+        this.name,
+        `${action}: DOUYIN_THIRD_PARTY_* 未配置`,
+      );
+    }
+  }
+
   async healthCheck() {
     if (!this.configured) return { ok: true, detail: 'third-party not configured' };
     try {
@@ -42,85 +57,142 @@ export class DouyinThirdPartyProvider implements LiveProvider {
     }
   }
 
-  /**
-   * 关键词搜索用户（TikHub: POST /api/v1/douyin/search/fetch_user_search_v2）
-   * @see https://docs.tikhub.io/370212785e0
-   */
-  async searchUsers(keyword: string): Promise<NormalizedAnchorProfile[]> {
-    const q = keyword.trim();
-    if (!q) return [];
-    if (!this.configured) {
-      throw new BadRequestException(
-        '抖音用户搜索需要配置 DOUYIN_THIRD_PARTY_BASE_URL 与 DOUYIN_THIRD_PARTY_API_KEY（推荐 TikHub fetch_user_search_v2）',
-      );
-    }
-    const { data } = await axios.post(
-      `${this.base}/api/v1/douyin/search/fetch_user_search_v2`,
-      { keyword: q, cursor: 0 },
-      {
-        timeout: 20000,
-        headers: { Authorization: `Bearer ${this.apiKey}` },
-      },
+  async searchUsers(_keyword: string): Promise<NormalizedAnchorProfile[]> {
+    throw new BadRequestException(
+      '抖音请按用户 ID（抖音号，如 kelie329157）搜索，不支持昵称。',
     );
-    const list = data?.data?.user_list || data?.user_list || [];
-    return (Array.isArray(list) ? list : [])
-      .map((row: any) => this.mapUserRow(row))
-      .filter((p: NormalizedAnchorProfile | null): p is NormalizedAnchorProfile => !!p);
   }
 
   async resolve(input: string): Promise<NormalizedAnchorProfile> {
     const parsed = parseDouyinInput(input);
 
     if (parsed.kind === 'search_keyword') {
-      const users = await this.searchUsers(parsed.keyword);
-      if (!users.length) {
-        throw new BadRequestException(`未找到抖音用户：${parsed.keyword}`);
-      }
-      return users[0];
-    }
-
-    if (parsed.kind === 'sec_uid') {
-      assertStableDouyinUid(parsed.secUid);
-      if (this.configured) {
-        // 用搜索/详情能力补全昵称头像（无单独接口时退回 sec_uid 自身）
-        try {
-          const users = await this.searchUsers(parsed.secUid);
-          const hit = users.find((u) => u.platformUid === parsed.secUid);
-          if (hit) return hit;
-        } catch (e) {
-          this.logger.warn(`douyin resolve enrich failed: ${(e as Error).message}`);
-        }
-      }
-      return {
-        platform: 'douyin',
-        platformUid: parsed.secUid,
-        nickname: `抖音用户${parsed.secUid.slice(0, 8)}`,
-        avatarUrl: '',
-        profileUrl: `https://www.douyin.com/user/${parsed.secUid}`,
-      };
-    }
-
-    if (parsed.kind === 'live_id') {
-      if (!this.configured) {
-        throw new BadRequestException(
-          '解析抖音直播间需要配置第三方 API，或改用用户主页链接 / 关键词搜索',
-        );
-      }
-      // 直播间 ID → 需第三方 room 接口；未接时明确失败，禁止伪造 uid
       throw new BadRequestException(
-        `暂不支持仅凭直播间号 ${parsed.liveId} 解析，请粘贴用户主页链接或用昵称搜索`,
+        '请输入抖音号（用户 ID，如 kelie329157），不支持昵称或搜索页链接。',
       );
     }
 
-    // share_text：尽量抽出短链或关键词
+    if (parsed.kind === 'user_id') {
+      assertDouyinUserId(parsed.userId);
+      this.requireConfiguredOrSkip('查询抖音主播资料');
+      return this.fetchProfile(parsed.userId, parsed.idType);
+    }
+
+    if (parsed.kind === 'live_id') {
+      throw new BadRequestException(
+        '请使用抖音号（用户 ID）添加，暂不支持仅凭直播间号。',
+      );
+    }
+
     const urlInText = input.match(/https?:\/\/[^\s]+/i)?.[0];
     if (urlInText) return this.resolve(urlInText);
-    throw new BadRequestException('无法解析抖音分享文案，请粘贴用户主页链接或搜索关键词');
+    throw new BadRequestException('无法识别输入。请填写抖音号，例如 kelie329157。');
   }
 
   /**
-   * Douyin room status 0 often means live — normalize inside provider.
+   * 真实拉取用户资料（昵称 + 头像 + sec_uid）
    */
+  async fetchProfile(
+    id: string,
+    idType: 'unique_id' | 'sec_uid',
+  ): Promise<NormalizedAnchorProfile> {
+    try {
+      if (idType === 'unique_id') {
+        const { data } = await axios.get(
+          `${this.base}/api/v1/douyin/web/handler_user_profile_v2`,
+          {
+            params: { unique_id: id },
+            timeout: 20000,
+            headers: { Authorization: `Bearer ${this.apiKey}` },
+          },
+        );
+        const profile = this.mapProfilePayload(data, id);
+        if (!profile) {
+          throw new BadRequestException(`未找到抖音号：${id}`);
+        }
+        return profile;
+      }
+
+      // sec_uid
+      const { data } = await axios.get(
+        `${this.base}/api/v1/douyin/web/fetch_user_profile_by_sec_uid`,
+        {
+          params: { sec_user_id: id },
+          timeout: 20000,
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          validateStatus: (s) => s < 500,
+        },
+      );
+      let profile = this.mapProfilePayload(data, id);
+      if (!profile) {
+        // 部分账号的备用路径
+        const fallback = await axios.get(
+          `${this.base}/api/v1/douyin/app/v3/handler_user_profile`,
+          {
+            params: { sec_user_id: id },
+            timeout: 20000,
+            headers: { Authorization: `Bearer ${this.apiKey}` },
+            validateStatus: (s) => s < 500,
+          },
+        );
+        profile = this.mapProfilePayload(fallback.data, id);
+      }
+      if (!profile) {
+        throw new BadRequestException(`未找到该抖音用户：${id}`);
+      }
+      return profile;
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      const msg = (e as Error).message || 'unknown';
+      this.logger.error(`douyin fetchProfile failed: ${msg}`);
+      throw new BadRequestException(`拉取抖音资料失败：${msg}`);
+    }
+  }
+
+  private mapProfilePayload(payload: any, fallbackId: string): NormalizedAnchorProfile | null {
+    const root = payload?.data ?? payload;
+    const user =
+      root?.user ??
+      root?.user_info ??
+      root?.userInfo ??
+      root?.profile ??
+      root;
+
+    if (!user || typeof user !== 'object') return null;
+
+    const nickname = String(user.nickname || user.nick_name || '').trim();
+    const uniqueId = String(user.unique_id || user.uniqueId || fallbackId).trim();
+    const secUid = String(
+      user.sec_uid || user.secUid || user.sec_user_id || '',
+    ).trim();
+
+    const avatar =
+      pickAvatar(user.avatar_larger) ||
+      pickAvatar(user.avatar_medium) ||
+      pickAvatar(user.avatar_thumb) ||
+      pickAvatar(user.avatar_300x300) ||
+      String(user.avatar_url || user.avatar || '');
+
+    // 稳定主键优先 sec_uid；没有则用抖音号
+    const platformUid = secUid || uniqueId || fallbackId;
+    if (!platformUid) return null;
+    if (!nickname && !avatar) {
+      // 空壳响应视为未找到
+      if (!secUid && !uniqueId) return null;
+    }
+
+    return {
+      platform: 'douyin',
+      platformUid,
+      roomId: uniqueId || fallbackId,
+      nickname: nickname || uniqueId || fallbackId,
+      avatarUrl: avatar,
+      profileUrl: secUid
+        ? `https://www.douyin.com/user/${secUid}`
+        : `https://www.douyin.com/search/${encodeURIComponent(uniqueId || fallbackId)}?type=user`,
+    };
+  }
+
   async fetchStatus(uids: string[]): Promise<NormalizedLiveResult[]> {
     if (!this.configured) {
       return uids.map((uid) => ({
@@ -168,24 +240,13 @@ export class DouyinThirdPartyProvider implements LiveProvider {
       throw e;
     }
   }
+}
 
-  private mapUserRow(row: any): NormalizedAnchorProfile | null {
-    const info = row?.user_info || row?.user || row;
-    const secUid = String(info?.sec_uid || info?.secUid || '').trim();
-    if (!secUid) return null;
-    const avatar =
-      info?.avatar_larger?.url_list?.[0] ||
-      info?.avatar_medium?.url_list?.[0] ||
-      info?.avatar_thumb?.url_list?.[0] ||
-      info?.avatar_url ||
-      '';
-    return {
-      platform: 'douyin',
-      platformUid: secUid,
-      nickname: info?.nickname || info?.unique_id || secUid.slice(0, 8),
-      avatarUrl: avatar,
-      profileUrl: `https://www.douyin.com/user/${secUid}`,
-      roomId: info?.unique_id || '',
-    };
-  }
+function pickAvatar(node: any): string {
+  if (!node) return '';
+  if (typeof node === 'string') return node;
+  const list = node.url_list || node.urlList;
+  if (Array.isArray(list) && list[0]) return String(list[0]);
+  if (node.uri) return String(node.uri);
+  return '';
 }

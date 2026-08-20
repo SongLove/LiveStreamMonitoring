@@ -104,6 +104,13 @@ export const quotaApi = {
   refresh() {
     return post<QuotaSnapshot>('/quota/refresh')
   },
+  /** 仅服务端未配置 WECHAT_APPID 时可用 */
+  mockSubscribeAccept(templateId: string, status: 'accept' | 'reject' = 'accept') {
+    return post<{ granted: boolean; balance?: number; reason?: string }>(
+      '/wechat/mock-subscribe-accept',
+      { templateId, status },
+    )
+  },
 }
 
 /** GET logs · POST test · GET diagnose/auth · GET help/faq · GET config/app */
