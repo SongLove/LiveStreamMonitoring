@@ -1,26 +1,35 @@
+/**
+ * Client API — 与 Server Swagger 对齐
+ * 文档: http://localhost:4000/docs  OpenAPI: /docs/json
+ * Base: VITE_API_BASE_URL → http://localhost:4000/api/v1
+ */
 import { del, get, patch, post, put } from '@/utils/request'
 import type {
   Anchor,
+  AnchorPoolResponse,
   AppConfig,
   Category,
+  DiagnoseAuthResponse,
   LiveSession,
+  LoginResponse,
   NotifyLog,
+  NotifyTestResponse,
   Platform,
+  QuotaResponse,
+  QuotaSnapshot,
   Subscription,
   UserProfile,
   UserSettings,
 } from '@/types/api'
 
+/** POST /api/v1/auth/login */
 export const authApi = {
   login(code: string) {
-    return post<{ accessToken: string; user: { id: string; nickname: string; avatarUrl: string; status: string } }>(
-      '/auth/login',
-      { code },
-      false,
-    )
+    return post<LoginResponse>('/auth/login', { code }, false)
   },
 }
 
+/** GET /api/v1/user/profile · PUT /api/v1/user/settings */
 export const userApi = {
   profile() {
     return get<UserProfile>('/user/profile')
@@ -30,6 +39,7 @@ export const userApi = {
   },
 }
 
+/** GET search · POST resolve · GET pool · GET :id */
 export const anchorApi = {
   search(platform: Platform, q: string) {
     return get<Anchor[]>('/anchors/search', { platform, q })
@@ -38,13 +48,14 @@ export const anchorApi = {
     return post<Anchor>('/anchors/resolve', { platform, input })
   },
   pool() {
-    return get<{ sets: unknown[]; message?: string }>('/anchors/pool')
+    return get<AnchorPoolResponse>('/anchors/pool')
   },
   detail(id: string) {
     return get<Anchor>(`/anchors/${id}`)
   },
 }
 
+/** /api/v1/subscriptions* */
 export const subscriptionApi = {
   list() {
     return get<Subscription[]>('/subscriptions')
@@ -52,7 +63,10 @@ export const subscriptionApi = {
   add(anchorId: string, categoryIds?: string[]) {
     return post<Subscription>('/subscriptions', { anchorId, categoryIds })
   },
-  update(id: string, data: Partial<Pick<Subscription, 'enabled' | 'remark' | 'categoryIds' | 'sortOrder'>>) {
+  update(
+    id: string,
+    data: Partial<Pick<Subscription, 'enabled' | 'remark' | 'categoryIds' | 'sortOrder'>>,
+  ) {
     return patch<Subscription>(`/subscriptions/${id}`, data as Record<string, unknown>)
   },
   remove(id: string) {
@@ -63,6 +77,7 @@ export const subscriptionApi = {
   },
 }
 
+/** /api/v1/categories* */
 export const categoryApi = {
   list() {
     return get<Category[]>('/categories')
@@ -70,7 +85,7 @@ export const categoryApi = {
   create(data: { name: string; color?: string; icon?: string }) {
     return post<Category>('/categories', data)
   },
-  update(id: string, data: { name?: string; color?: string; icon?: string; sortOrder?: number }) {
+  update(id: string, data: { name?: string; color?: string; icon?: string }) {
     return patch<Category>(`/categories/${id}`, data)
   },
   remove(id: string) {
@@ -81,15 +96,17 @@ export const categoryApi = {
   },
 }
 
+/** GET /api/v1/quota · POST refresh（grant 禁止 Client 调用） */
 export const quotaApi = {
   get() {
-    return get<{ balance: number; maxBalance: number; recentLedger: unknown[] }>('/quota')
+    return get<QuotaResponse>('/quota')
   },
   refresh() {
-    return post<{ balance: number; maxBalance: number }>('/quota/refresh')
+    return post<QuotaSnapshot>('/quota/refresh')
   },
 }
 
+/** GET logs · POST test · GET diagnose/auth · GET help/faq · GET config/app */
 export const notifyApi = {
   logs(page = 1, pageSize = 20) {
     return get<{ items: NotifyLog[]; total: number; page: number; pageSize: number }>(
@@ -98,29 +115,21 @@ export const notifyApi = {
     )
   },
   test(message?: string) {
-    return post<{ ok: boolean; reason?: string; result?: { errcode: number } }>('/notify/test', { message })
+    return post<NotifyTestResponse>('/notify/test', { message })
   },
 }
 
 export const diagnoseApi = {
   auth() {
-    return get<{
-      status: string
-      templateAuth: Record<string, string>
-      notifyEnabled: boolean
-      quota: { balance: number; maxBalance: number }
-    }>('/diagnose/auth')
-  },
-  clearCache() {
-    return post<{ ok: boolean }>('/diagnose/clear-cache')
+    return get<DiagnoseAuthResponse>('/diagnose/auth')
   },
 }
 
 export const liveApi = {
-  sessions(page = 1, pageSize = 20) {
-    return get<{ items: LiveSession[]; total: number; page: number; pageSize: number }>(
+  sessions(page = 1, pageSize = 20, query?: { platform?: string; anchorId?: string }) {
+    return get<{ items: LiveSession[]; total: number; page: number; pageSize: number; userId: string }>(
       '/live/sessions',
-      { page, pageSize },
+      { page, pageSize, ...query },
     )
   },
 }

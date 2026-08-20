@@ -4,6 +4,7 @@ import type { Platform } from '@/types/api'
 import { anchorApi, subscriptionApi } from '@/api'
 import { useCategoryStore } from '@/stores/subscription'
 import { trackEvent } from '@/utils/analytics'
+import { ApiError } from '@/utils/request'
 import { liveStateLabel } from '@/utils/format'
 
 const platform = ref<Platform>('douyin')
@@ -22,7 +23,7 @@ async function onResolve() {
     resolved.value = await anchorApi.resolve(platform.value, input.value.trim())
     trackEvent('resolve_success')
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '解析失败'
+    error.value = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '解析失败'
   } finally {
     loading.value = false
   }
@@ -44,7 +45,8 @@ async function onFollow() {
       },
     })
   } catch (e: unknown) {
-    uni.showToast({ title: e instanceof Error ? e.message : '关注失败', icon: 'none' })
+    const msg = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '关注失败'
+    uni.showToast({ title: msg, icon: 'none' })
   } finally {
     loading.value = false
   }

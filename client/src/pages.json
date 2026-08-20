@@ -86,6 +86,46 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarBackgroundColor": "#ecfdf5",
-    "backgroundColor": "#ecfdf5"
+    "backgroundColor": "#ecfdf5",
+    "backgroundColorTop": "#ecfdf5",
+    "backgroundColorBottom": "#ecfdf5"
+  },
+  "tabBar": {
+    "color": "#94a3b8",
+    "selectedColor": "#16a34a",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "监控",
+        "iconPath": "static/tab/off.png",
+        "selectedIconPath": "static/tab/on.png"
+      },
+      {
+        "pagePath": "pages/media/index",
+        "text": "传媒监控",
+        "iconPath": "static/tab/off.png",
+        "selectedIconPath": "static/tab/on.png"
+      },
+      {
+        "pagePath": "pages/replay/index",
+        "text": "直播回放",
+        "iconPath": "static/tab/off.png",
+        "selectedIconPath": "static/tab/on.png"
+      },
+      {
+        "pagePath": "pages/settings/index",
+        "text": "设置",
+        "iconPath": "static/tab/off.png",
+        "selectedIconPath": "static/tab/on.png"
+      },
+      {
+        "pagePath": "pages/help/index",
+        "text": "帮助",
+        "iconPath": "static/tab/off.png",
+        "selectedIconPath": "static/tab/on.png"
+      }
+    ]
   }
 }

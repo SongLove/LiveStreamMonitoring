@@ -60,4 +60,4 @@
 - [x] 9.2 全页面 loading/empty/error 态
 - [ ] 9.3 验收闭环（需 Server 联调 + 微信开发者工具）
 - [x] 9.4 integration-boundary 代码守门
-- [ ] 9.5 与 Server 联调（需配置 appid、域名、模板 ID）
+- [x] 9.5 与 Server 联调：`pnpm verify:api` 对照 http://localhost:4000/docs 全部 Client 接口通过

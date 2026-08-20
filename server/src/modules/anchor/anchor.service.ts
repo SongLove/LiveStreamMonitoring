@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Anchor, AnchorDocument, Platform } from './anchor.schema';
@@ -20,21 +20,70 @@ export class AnchorService {
   async search(platform: Platform, keyword: string) {
     const q = keyword.trim();
     if (!q) return [];
-    return this.anchorModel
+
+    // 抖音搜索页 URL → 提取关键词
+    let query = q;
+    if (platform === 'douyin') {
+      const m = q.match(/douyin\.com\/(?:jingxuan\/)?search\/([^?&#/]+)/i);
+      if (m) {
+        try {
+          query = decodeURIComponent(m[1]).trim();
+        } catch {
+          query = m[1];
+        }
+      }
+    }
+
+    const local = await this.anchorModel
       .find({
         platform,
         $or: [
-          { nickname: new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-          { platformUid: q },
-          { roomId: q },
+          { nickname: new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+          { platformUid: query },
+          { roomId: query },
         ],
       })
       .limit(20)
       .lean();
+
+    if (local.length > 0) return local;
+
+    // 本地未命中：走 Provider 外部搜索（抖音需第三方）
+    const remote = await this.crawler.searchUsers(platform, query);
+    const saved: unknown[] = [];
+    for (const r of remote.slice(0, 20)) {
+      const doc = await this.anchorModel.findOneAndUpdate(
+        { platform: r.platform, platformUid: r.platformUid },
+        {
+          $set: {
+            nickname: r.nickname,
+            avatarUrl: r.avatarUrl,
+            profileUrl: r.profileUrl,
+            roomId: r.roomId || '',
+            status: 'active',
+          },
+          $setOnInsert: { pollTier: 2, liveState: 'offline' },
+        },
+        { upsert: true, new: true },
+      );
+      saved.push(doc.toObject());
+    }
+    return saved;
   }
 
   async resolve(platform: Platform, input: string) {
     const resolved = await this.crawler.resolve(platform, input);
+    // 禁止把中文昵称 / URL 编码片段当成稳定主键
+    if (
+      platform === 'douyin' &&
+      (/[\u4e00-\u9fff]/.test(resolved.platformUid) ||
+        resolved.platformUid.includes('%') ||
+        resolved.platformUid.includes('?'))
+    ) {
+      throw new BadRequestException(
+        '抖音解析未得到稳定 sec_uid，请配置第三方搜索或粘贴用户主页链接',
+      );
+    }
     const doc = await this.anchorModel.findOneAndUpdate(
       { platform, platformUid: resolved.platformUid },
       {

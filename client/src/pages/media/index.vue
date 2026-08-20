@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import AppTabBar from '@/components/AppTabBar.vue'
+import PageShell from '@/components/PageShell.vue'
 import AnchorListItem from '@/components/AnchorListItem.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore, useSubscriptionStore } from '@/stores/subscription'
+import { hideNativeTabBar } from '@/utils/tabbar'
 
 const auth = useAuthStore()
 const categoryStore = useCategoryStore()
@@ -38,6 +40,7 @@ function goCategoryManage() {
 }
 
 onShow(() => {
+  hideNativeTabBar()
   if (!auth.isLoggedIn) {
     uni.reLaunch({ url: '/pages/login/index' })
     return
@@ -52,54 +55,53 @@ onMounted(load)
 </script>
 
 <template>
-  <view class="page-wrap">
-    <view class="header">
-      <text class="page-title">传媒监控</text>
+  <PageShell with-tab-bar>
+    <template #nav>
+      <text class="nav-title">传媒监控</text>
+    </template>
+    <template #nav-right>
       <text class="manage" @tap="goCategoryManage">📁</text>
-    </view>
-
-    <view class="seg-tabs">
-      <view
-        v-for="cat in diyCategories"
-        :key="cat._id"
-        class="seg"
-        :class="{ active: activeCategory === cat._id }"
-        @tap="activeCategory = cat._id"
-      >
-        {{ cat.name }}
-      </view>
-      <view v-if="!diyCategories.length" class="seg hint" @tap="goCategoryManage">+ 创建分类</view>
-    </view>
-
-    <view class="section-card">
-      <view class="section-header">
-        <text class="section-title">主播列表</text>
-        <text class="badge-pill">{{ list.length }}位主播</text>
+    </template>
+    <view class="page-wrap">
+      <view class="seg-tabs">
+        <view
+          v-for="cat in diyCategories"
+          :key="cat._id"
+          class="seg"
+          :class="{ active: activeCategory === cat._id }"
+          @tap="activeCategory = cat._id"
+        >
+          {{ cat.name }}
+        </view>
+        <view v-if="!diyCategories.length" class="seg hint" @tap="goCategoryManage">+ 创建分类</view>
       </view>
 
-      <view v-if="!list.length" class="empty-wrap">该分类暂无主播，去归类吧</view>
-      <AnchorListItem
-        v-for="item in list"
-        :key="item._id"
-        :item="item"
-        show-switch
-        @tap="goDetail"
-        @toggle="onToggle"
-      />
-    </view>
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">主播列表</text>
+          <text class="badge-pill">{{ list.length }}位主播</text>
+        </view>
 
-    <AppTabBar current="media" />
-  </view>
+        <view v-if="!list.length" class="empty-wrap">该分类暂无主播，去归类吧</view>
+        <AnchorListItem
+          v-for="item in list"
+          :key="item._id"
+          :item="item"
+          show-switch
+          @tap="goDetail"
+          @toggle="onToggle"
+        />
+      </view>
+    </view>
+    <template #footer>
+      <AppTabBar current="media" />
+    </template>
+  </PageShell>
 </template>
 
 <style lang="scss" scoped>
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 .manage {
-  font-size: 40rpx;
+  font-size: 36rpx;
 }
 .seg-tabs {
   display: flex;

@@ -5,17 +5,20 @@ uni-app + Vue3 + TypeScript 微信小程序，对接 Server `/api/v1`。
 ## 开发
 
 ```bash
-# Node 18+ / pnpm
-cp .env.development .env.local   # 按需修改 VITE_API_BASE_URL
 pnpm install
-pnpm dev:mp-weixin               # 微信开发者工具导入 dist/dev/mp-weixin
+# 若遇 ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION：项目已 pin pnpm@9.15.9 + .npmrc minimum-release-age=0
+# 执行：corepack prepare pnpm@9.15.9 --activate
+pnpm verify:api   # 对照 Swagger 验证接口（需 Server 运行在 4000）
+pnpm dev:mp-weixin
 ```
+
+**Swagger**: http://localhost:4000/docs · OpenAPI JSON: `/docs/json`
 
 ## 配置
 
 | 变量 | 说明 |
 |---|---|
-| `VITE_API_BASE_URL` | Server API 根路径，如 `http://localhost:3000/api/v1` |
+| `VITE_API_BASE_URL` | 必须为 `http://localhost:4000/api/v1`（含 `/api/v1` 前缀） |
 | `manifest.json` → `mp-weixin.appid` | 微信小程序 AppID |
 
 ## 页面结构（对齐设计稿）

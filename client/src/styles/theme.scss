@@ -21,9 +21,23 @@ $shadow-card: 0 8rpx 32rpx rgba(15, 23, 42, 0.06);
 }
 
 .page-wrap {
-  min-height: 100vh;
-  padding: 24rpx 32rpx 180rpx;
+  min-height: 100%;
+  padding: 16rpx 32rpx 0;
   box-sizing: border-box;
+}
+
+.nav-title {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: $text-primary;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.green {
+    color: $primary;
+  }
 }
 
 .page-title {

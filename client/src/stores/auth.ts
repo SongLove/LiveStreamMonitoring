@@ -12,10 +12,8 @@ export const useAuthStore = defineStore('auth', {
     isLoggedIn: (s) => !!s.accessToken,
   },
   actions: {
-    async login() {
-      const { code } = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-        uni.login({ provider: 'weixin', success: resolve, fail: reject })
-      })
+    /** POST /api/v1/auth/login — 返回 { accessToken, user: { id, ... } } */
+    async login(code: string) {
       const data = await authApi.login(code)
       this.accessToken = data.accessToken
       this.userId = data.user.id

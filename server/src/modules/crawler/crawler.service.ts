@@ -19,6 +19,24 @@ export class CrawlerService {
     return provider.resolve(input);
   }
 
+  /** 平台用户搜索（本地未命中时由 AnchorService 调用） */
+  async searchUsers(platform: Platform, keyword: string) {
+    const provider = this.registry.primary(platform) as {
+      searchUsers?: (kw: string) => Promise<
+        Array<{
+          platform: Platform;
+          platformUid: string;
+          nickname: string;
+          avatarUrl: string;
+          profileUrl: string;
+          roomId?: string;
+        }>
+      >;
+    };
+    if (!provider.searchUsers) return [];
+    return provider.searchUsers(keyword);
+  }
+
   async fetchStatuses(
     platform: Platform,
     uids: string[],

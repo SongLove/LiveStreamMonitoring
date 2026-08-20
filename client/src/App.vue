@@ -2,9 +2,11 @@
 import { onLaunch } from '@dcloudio/uni-app'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/profile'
+import { useLayoutStore } from '@/stores/layout'
 import { trackEvent } from '@/utils/analytics'
 
 onLaunch(async () => {
+  useLayoutStore().init()
   trackEvent('app_open')
   const auth = useAuthStore()
   const config = useAppConfigStore()

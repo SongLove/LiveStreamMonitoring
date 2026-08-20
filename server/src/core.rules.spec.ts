@@ -120,3 +120,30 @@ describe('quota grant only via callback helper', () => {
     expect(grants.size).toBe(1);
   });
 });
+
+describe('douyin input parse', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { parseDouyinInput, assertStableDouyinUid } = require('./modules/crawler/providers/douyin-input');
+
+  it('extracts keyword from jingxuan search URL', () => {
+    const url =
+      'https://www.douyin.com/jingxuan/search/%E9%BA%BB%E8%BE%A3%E6%AF%9B%E8%9B%8B?type=user';
+    expect(parseDouyinInput(url)).toEqual({
+      kind: 'search_keyword',
+      keyword: '麻辣毛蛋',
+    });
+  });
+
+  it('parses user profile sec_uid', () => {
+    const url = 'https://www.douyin.com/user/MS4wLjABAAAA_abc123xyz';
+    expect(parseDouyinInput(url)).toEqual({
+      kind: 'sec_uid',
+      secUid: 'MS4wLjABAAAA_abc123xyz',
+    });
+  });
+
+  it('rejects chinese nickname as platformUid', () => {
+    expect(() => assertStableDouyinUid('麻辣毛蛋')).toThrow();
+    expect(() => assertStableDouyinUid('%E9%BA%BB?type=user')).toThrow();
+  });
+});

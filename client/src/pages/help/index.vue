@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import AppTabBar from '@/components/AppTabBar.vue'
+import PageShell from '@/components/PageShell.vue'
 import { useAuthStore } from '@/stores/auth'
-import { diagnoseApi, helpApi, notifyApi } from '@/api'
+import { diagnoseApi, helpApi, notifyApi, quotaApi } from '@/api'
+import { useProfileStore } from '@/stores/profile'
+import { ApiError } from '@/utils/request'
 import { clearLocalCache } from '@/utils/format'
 import { trackEvent } from '@/utils/analytics'
+import { hideNativeTabBar } from '@/utils/tabbar'
+import AppTabBar from '@/components/AppTabBar.vue'
 
 const auth = useAuthStore()
+const profileStore = useProfileStore()
 const faqItems = ref<Array<{ q: string; a: string }>>([])
-const diagnoseResult = ref('')
 const loading = ref(false)
 
 const defaultFaq = [
@@ -28,19 +32,31 @@ async function loadFaq() {
   }
 }
 
+function formatDiagnose(res: Awaited<ReturnType<typeof diagnoseApi.auth>>) {
+  const lines = [
+    `账号: ${res.status}`,
+    `总开关: ${res.notifyEnabled ? '开' : '关'}`,
+    `额度: ${res.quota.balance}/${res.quota.maxBalance}`,
+  ]
+  const entries = Object.entries(res.templateAuth || {})
+  if (entries.length) {
+    lines.push('模板授权:')
+    entries.forEach(([k, v]) => lines.push(`  ${k}: ${v}`))
+  } else {
+    lines.push('模板授权: 暂无记录（请先在小程序内授权）')
+  }
+  return lines.join('\n')
+}
+
 async function checkAuth() {
   loading.value = true
   try {
     const res = await diagnoseApi.auth()
-    const entries = Object.entries(res.templateAuth)
-    if (!entries.length) {
-      diagnoseResult.value = '暂无模板配置'
-    } else {
-      diagnoseResult.value = entries.map(([k, v]) => `${k}: ${v}`).join('\n')
-    }
-    uni.showModal({ title: '订阅权限', content: diagnoseResult.value || '正常', showCancel: false })
+    profileStore.mergeDiagnose(res)
+    uni.showModal({ title: '订阅权限', content: formatDiagnose(res), showCancel: false })
   } catch (e: unknown) {
-    uni.showToast({ title: e instanceof Error ? e.message : '检查失败', icon: 'none' })
+    const msg = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '检查失败'
+    uni.showToast({ title: msg, icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -50,14 +66,18 @@ async function sendTest() {
   trackEvent('test_push_click')
   uni.showModal({
     title: '测试推送',
-    content: '测试消息不代表真实开播提醒，不消耗您的推送次数（若服务端配置允许）',
+    content: '测试推送会走真实微信下发并消耗 1 次额度。不代表真实开播提醒。',
     success: async (res) => {
       if (!res.confirm) return
       try {
         const r = await notifyApi.test('测试推送')
-        uni.showToast({ title: r.ok ? '已发送' : r.reason || '发送失败', icon: 'none' })
+        if (r.ok) uni.showToast({ title: '已发送', icon: 'success' })
+        else if (r.reason === 'quota_insufficient') uni.showToast({ title: '推送次数不足', icon: 'none' })
+        else uni.showToast({ title: r.result?.errmsg || '发送失败', icon: 'none' })
+        await profileStore.fetchProfile()
       } catch (e: unknown) {
-        uni.showToast({ title: e instanceof Error ? e.message : '失败', icon: 'none' })
+        const msg = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '失败'
+        uni.showToast({ title: msg, icon: 'none' })
       }
     },
   })
@@ -65,10 +85,14 @@ async function sendTest() {
 
 async function clearNotifyCache() {
   try {
-    await diagnoseApi.clearCache()
-    uni.showToast({ title: '已清除通知缓存', icon: 'success' })
+    await quotaApi.refresh()
+    const diag = await diagnoseApi.auth()
+    profileStore.mergeDiagnose(diag)
+    await profileStore.fetchProfile()
+    uni.showToast({ title: '已刷新授权与额度', icon: 'success' })
   } catch (e: unknown) {
-    uni.showToast({ title: e instanceof Error ? e.message : '失败', icon: 'none' })
+    const msg = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '失败'
+    uni.showToast({ title: msg, icon: 'none' })
   }
 }
 
@@ -90,69 +114,74 @@ function showFaq(item: { q: string; a: string }) {
 }
 
 onShow(() => {
+  hideNativeTabBar()
   if (!auth.isLoggedIn) uni.reLaunch({ url: '/pages/login/index' })
 })
 onMounted(loadFaq)
 </script>
 
 <template>
-  <view class="page-wrap">
-    <text class="page-title">帮助中心</text>
+  <PageShell with-tab-bar>
+    <template #nav>
+      <text class="nav-title">帮助中心</text>
+    </template>
+    <view class="page-wrap">
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">【点击检查】自助诊断工具</text>
+          <text class="badge-pill">4项功能</text>
+        </view>
 
-    <view class="section-card">
-      <view class="section-header">
-        <text class="section-title">【点击检查】自助诊断工具</text>
-        <text class="badge-pill">4项功能</text>
+        <view class="tool" @tap="checkAuth">
+          <text class="tool-icon">🛡</text>
+          <view class="tool-text">
+            <text class="tool-title">检查订阅权限</text>
+            <text class="tool-desc">GET /diagnose/auth</text>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+        <view class="tool" @tap="sendTest">
+          <text class="tool-icon">🔔</text>
+          <view class="tool-text">
+            <text class="tool-title">发送测试推送</text>
+            <text class="tool-desc">POST /notify/test</text>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+        <view class="tool" @tap="clearNotifyCache">
+          <text class="tool-icon">🧹</text>
+          <view class="tool-text">
+            <text class="tool-title">清除通知缓存</text>
+            <text class="tool-desc">刷新额度与授权镜像</text>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+        <view class="tool" @tap="clearLocal">
+          <text class="tool-icon">🔄</text>
+          <view class="tool-text">
+            <text class="tool-title">清除本地缓存</text>
+            <text class="tool-desc">清理本地数据解决小程序显示异常</text>
+          </view>
+          <text class="arrow">›</text>
+        </view>
       </view>
 
-      <view class="tool" @tap="checkAuth">
-        <text class="tool-icon">🛡</text>
-        <view class="tool-text">
-          <text class="tool-title">检查订阅权限</text>
-          <text class="tool-desc">检查通知权限是否正常开启</text>
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">常见问题</text>
+          <text class="badge-pill">{{ faqItems.length }}个问题</text>
         </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="tool" @tap="sendTest">
-        <text class="tool-icon">🔔</text>
-        <view class="tool-text">
-          <text class="tool-title">发送测试推送</text>
-          <text class="tool-desc">验证是否能正常收到通知</text>
+        <view v-for="(item, i) in faqItems" :key="i" class="faq" @tap="showFaq(item)">
+          <text class="q">Q</text>
+          <text class="faq-q">{{ item.q }}</text>
+          <text class="arrow">›</text>
         </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="tool" @tap="clearNotifyCache">
-        <text class="tool-icon">🧹</text>
-        <view class="tool-text">
-          <text class="tool-title">清除通知缓存</text>
-          <text class="tool-desc">修复有次数但无法推送的问题</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="tool" @tap="clearLocal">
-        <text class="tool-icon">🔄</text>
-        <view class="tool-text">
-          <text class="tool-title">清除本地缓存</text>
-          <text class="tool-desc">清理本地数据解决小程序显示异常</text>
-        </view>
-        <text class="arrow">›</text>
       </view>
     </view>
-
-    <view class="section-card">
-      <view class="section-header">
-        <text class="section-title">常见问题</text>
-        <text class="badge-pill">{{ faqItems.length }}个问题</text>
-      </view>
-      <view v-for="(item, i) in faqItems" :key="i" class="faq" @tap="showFaq(item)">
-        <text class="q">Q</text>
-        <text class="faq-q">{{ item.q }}</text>
-        <text class="arrow">›</text>
-      </view>
-    </view>
-
-    <AppTabBar current="help" />
-  </view>
+    <template #footer>
+      <AppTabBar current="help" />
+    </template>
+  </PageShell>
 </template>
 
 <style lang="scss" scoped>

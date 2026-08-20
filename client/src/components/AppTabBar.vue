@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
+import { useLayoutStore } from '@/stores/layout'
+
 defineProps<{ current: string }>()
+
+const layout = useLayoutStore()
 
 const tabs = [
   { key: 'monitor', path: '/pages/index/index', label: '监控', icon: '🏠' },
@@ -9,19 +14,31 @@ const tabs = [
   { key: 'help', path: '/pages/help/index', label: '帮助', icon: '❓' },
 ]
 
-function switchTab(path: string) {
-  uni.reLaunch({ url: path })
+onMounted(() => {
+  if (!layout.ready) layout.init()
+})
+
+/** 必须用 switchTab：页面保活，无 reLaunch 整页闪白 */
+function onSwitch(path: string, key: string, current: string) {
+  if (key === current) return
+  uni.switchTab({ url: path })
 }
+
+const tabbarStyle = computed(() => ({
+  paddingBottom: `${layout.safeAreaBottom}px`,
+  height: `${layout.tabBarHeight + layout.safeAreaBottom}px`,
+  boxSizing: 'border-box' as const,
+}))
 </script>
 
 <template>
-  <view class="tabbar">
+  <view class="tabbar" :style="tabbarStyle">
     <view
       v-for="tab in tabs"
       :key="tab.key"
       class="tab-item"
       :class="{ active: current === tab.key }"
-      @tap="switchTab(tab.path)"
+      @tap="onSwitch(tab.path, tab.key, current)"
     >
       <view class="icon-wrap">
         <text class="icon">{{ tab.icon }}</text>
@@ -37,12 +54,11 @@ function switchTab(path: string) {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 120rpx;
-  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 100;
   background: #fff;
   display: flex;
+  align-items: center;
   border-top: 1rpx solid #e2e8f0;
-  z-index: 100;
 }
 
 .tab-item {
@@ -53,6 +69,7 @@ function switchTab(path: string) {
   justify-content: center;
   color: #94a3b8;
   font-size: 22rpx;
+  height: 100%;
 
   &.active {
     color: #16a34a;
@@ -64,16 +81,16 @@ function switchTab(path: string) {
 }
 
 .icon-wrap {
-  width: 64rpx;
-  height: 64rpx;
+  width: 56rpx;
+  height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  margin-bottom: 4rpx;
+  margin-bottom: 2rpx;
 }
 
 .icon {
-  font-size: 36rpx;
+  font-size: 32rpx;
 }
 </style>

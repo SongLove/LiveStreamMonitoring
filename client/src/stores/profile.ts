@@ -27,7 +27,18 @@ export const useProfileStore = defineStore('profile', {
     },
     async updateSettings(partial: Partial<UserProfile['settings']>) {
       const settings = await userApi.updateSettings(partial)
-      if (this.profile) this.profile.settings = settings
+      if (this.profile) {
+        this.profile.settings = settings
+      }
+    },
+    /** 用 diagnose 结果刷新额度与授权镜像（Swagger 无 clear-cache 接口时的替代） */
+    mergeDiagnose(data: { templateAuth: UserProfile['templateAuth']; quota: UserProfile['quota']; notifyEnabled?: boolean }) {
+      if (!this.profile) return
+      this.profile.templateAuth = data.templateAuth
+      this.profile.quota = data.quota
+      if (data.notifyEnabled !== undefined) {
+        this.profile.settings.notifyEnabled = data.notifyEnabled
+      }
     },
   },
 })

@@ -1,3 +1,5 @@
+/** 与 Server Swagger `/docs/json` 对齐的 Client API 类型 */
+
 export type Platform = 'bilibili' | 'douyin'
 export type AnchorLiveState = 'offline' | 'pending_confirm' | 'live'
 export type UserStatus = 'active' | 'banned' | 'deleting'
@@ -12,6 +14,17 @@ export interface ApiResponse<T> {
   traceId?: string
 }
 
+/** POST /api/v1/auth/login 实际响应 data */
+export interface LoginResponse {
+  accessToken: string
+  user: {
+    id: string
+    status: UserStatus
+    nickname: string
+    avatarUrl: string
+  }
+}
+
 export interface UserSettings {
   notifyEnabled: boolean
   dndEnabled: boolean
@@ -22,6 +35,12 @@ export interface UserSettings {
   cooldownMinutes: number
 }
 
+export interface QuotaSnapshot {
+  balance: number
+  maxBalance: number
+}
+
+/** GET /api/v1/user/profile */
 export interface UserProfile {
   id: string
   nickname: string
@@ -30,7 +49,31 @@ export interface UserProfile {
   settings: UserSettings
   templateAuth: Record<string, TemplateAuthStatus>
   lastActiveAt: string
-  quota: { balance: number; maxBalance: number }
+  quota: QuotaSnapshot
+}
+
+/** GET /api/v1/diagnose/auth */
+export interface DiagnoseAuthResponse {
+  status: UserStatus
+  templateAuth: Record<string, TemplateAuthStatus>
+  notifyEnabled: boolean
+  quota: QuotaSnapshot
+}
+
+/** GET /api/v1/quota */
+export interface QuotaResponse {
+  balance: number
+  maxBalance: number
+  recentLedger: QuotaLedger[]
+}
+
+export interface QuotaLedger {
+  _id: string
+  type: 'grant' | 'deduct' | 'refund' | 'adjust'
+  amount: number
+  reason: string
+  templateId?: string
+  createdAt: string
 }
 
 export interface Anchor {
@@ -48,8 +91,9 @@ export interface Anchor {
   pollTier: number
   lastPolledAt: string | null
   subscriberCount: number
-  createdAt: string
-  updatedAt: string
+  status?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface Subscription {
@@ -110,9 +154,23 @@ export interface LiveSession {
   updatedAt: string
 }
 
+/** GET /api/v1/config/app */
 export interface AppConfig {
   templates: { liveNotify?: string }
   features: { studentMode: boolean; largeAccountOnly: boolean }
+}
+
+/** GET /api/v1/anchors/pool */
+export interface AnchorPoolResponse {
+  sets: unknown[]
+  message?: string
+}
+
+/** POST /api/v1/notify/test */
+export interface NotifyTestResponse {
+  ok: boolean
+  reason?: 'quota_insufficient' | string
+  result?: { errcode: number; errmsg?: string; msgid?: string }
 }
 
 export const NOTIFY_SKIP_LABELS: Record<string, string> = {
@@ -131,4 +189,11 @@ export const NOTIFY_SKIP_LABELS: Record<string, string> = {
 export const PLATFORM_LABELS: Record<Platform, string> = {
   douyin: '抖音',
   bilibili: '哔哩哔哩',
+}
+
+export const BUSINESS_ERROR_LABELS: Record<number, string> = {
+  403: '无权限',
+  40301: '账号已封禁',
+  40302: '账号注销中',
+  40010: '额度仅可通过微信订阅回调发放',
 }
