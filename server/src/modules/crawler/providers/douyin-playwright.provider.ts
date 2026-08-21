@@ -156,7 +156,9 @@ export class DouyinPlaywrightProvider implements LiveProvider {
       if (e instanceof BadRequestException) throw e;
       const msg = (e as Error).message || 'unknown';
       this.logger.error(`playwright resolve failed: ${msg}`);
-      throw new BadRequestException(`拉取抖音资料失败，请稍后重试`);
+      throw new BadRequestException(
+        `拉取抖音资料失败（Playwright）：${msg.slice(0, 120)}`,
+      );
     }
   }
 

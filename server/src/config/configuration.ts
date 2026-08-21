@@ -31,6 +31,8 @@ export default () => ({
     playwrightTimeoutMs: parseInt(process.env.DOUYIN_PW_TIMEOUT_MS || '20000', 10),
     playwrightConcurrency: parseInt(process.env.DOUYIN_PW_CONCURRENCY || '1', 10),
     playwrightHeadless: process.env.DOUYIN_PW_HEADLESS !== 'false',
+    /** Docker 内系统 Chromium，如 /usr/bin/chromium；空则用 Playwright 自带浏览器 */
+    playwrightExecutablePath: process.env.DOUYIN_PW_EXECUTABLE_PATH || '',
   },
   admin: {
     bootstrapUsername: process.env.ADMIN_BOOTSTRAP_USERNAME || 'admin',

@@ -13,6 +13,9 @@
     "start:prod:api": "node dist/main.api.js",
     "start:prod:worker": "node dist/main.worker.js",
     "dev:local": "bash scripts/dev-local.sh",
+    "docker:up": "bash scripts/docker-up.sh",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f --tail=200",
     "test": "jest --config ./jest.config.js --runInBand",
     "test:unit": "jest --config ./jest.config.js --runInBand --testPathPattern=spec.ts"
   },

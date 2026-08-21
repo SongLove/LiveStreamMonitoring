@@ -5,10 +5,14 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
+    "dev:mp-weixin:prod": "uni -p mp-weixin --mode production",
     "build:mp-weixin": "uni build -p mp-weixin",
+    "build:mp-weixin:prod": "uni build -p mp-weixin --mode production",
     "dev:h5": "uni",
+    "dev:h5:prod": "uni --mode production",
     "type-check": "vue-tsc --noEmit",
-    "verify:api": "node scripts/verify-api.mjs http://localhost:4000"
+    "verify:api": "node scripts/verify-api.mjs http://localhost:4000",
+    "verify:api:prod": "node scripts/verify-api.mjs https://anchor-api.deepfate.cn"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",

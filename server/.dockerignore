@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+dump.rdb
+.DS_Store
+openspec
+docs
+**/*.spec.ts
+jest.config.js
+scripts
+*.md

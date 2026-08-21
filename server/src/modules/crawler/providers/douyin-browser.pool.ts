@@ -4,6 +4,7 @@ import type { Browser, BrowserContext, Page } from 'playwright';
 
 /**
  * Process-wide Chromium + concurrency slot for Douyin profile fetches.
+ * Docker: set DOUYIN_PW_EXECUTABLE_PATH=/usr/bin/chromium
  */
 @Injectable()
 export class DouyinBrowserPool implements OnModuleDestroy {
@@ -26,6 +27,11 @@ export class DouyinBrowserPool implements OnModuleDestroy {
     return this.config.get<boolean>('douyin.playwrightHeadless') !== false;
   }
 
+  private get executablePath(): string | undefined {
+    const p = (this.config.get<string>('douyin.playwrightExecutablePath') || '').trim();
+    return p || undefined;
+  }
+
   async onModuleDestroy() {
     await this.close();
   }
@@ -37,8 +43,8 @@ export class DouyinBrowserPool implements OnModuleDestroy {
       } catch (e) {
         this.logger.warn(`browser close: ${(e as Error).message}`);
       }
-      this.browser = null;
     }
+    this.browser = null;
   }
 
   private async ensureBrowser(): Promise<Browser> {
@@ -46,9 +52,22 @@ export class DouyinBrowserPool implements OnModuleDestroy {
     // Lazy require so unit tests without playwright install still load the module graph
     // when browser path is mocked.
     const { chromium } = await import('playwright');
+    const execPath = this.executablePath;
+    this.logger.log(
+      execPath
+        ? `launch chromium executablePath=${execPath}`
+        : 'launch playwright-bundled chromium',
+    );
     this.browser = await chromium.launch({
       headless: this.headless,
-      args: ['--disable-blink-features=AutomationControlled'],
+      executablePath: execPath,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
     });
     return this.browser;
   }
