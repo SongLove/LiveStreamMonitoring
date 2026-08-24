@@ -112,7 +112,10 @@ export class PollExecuteProcessor extends WorkerHost {
   async process(job: Job<{ platform: string; anchorIds: string[] }>): Promise<void> {
     const { platform, anchorIds } = job.data;
     const anchors = await this.anchorModel.find({ _id: { $in: anchorIds } });
-    const uids = anchors.map((a) => a.platformUid);
+    // 抖音探测用 roomId（抖音号）；platformUid 多为 sec_uid，live.douyin.com 认前者
+    const uids = anchors.map((a) =>
+      platform === 'douyin' && a.roomId ? a.roomId : a.platformUid,
+    );
     const { results, deferred, allFailed } = await this.crawler.fetchStatuses(
       platform as any,
       uids,
@@ -127,7 +130,9 @@ export class PollExecuteProcessor extends WorkerHost {
       a.lastPolledAt = new Date(Date.now() + interval);
       await a.save();
       if (allFailed) continue;
-      const r = byUid.get(a.platformUid);
+      const r =
+        byUid.get(a.platformUid) ||
+        (a.roomId ? byUid.get(a.roomId) : undefined);
       if (!r) continue;
       await this.liveService.applyProbeResult(String(a._id), r.status, {
         provider: r.provider,
@@ -153,8 +158,12 @@ export class PollConfirmProcessor extends WorkerHost {
   async process(job: Job<{ anchorId: string }>): Promise<void> {
     const anchor = await this.anchorModel.findById(job.data.anchorId);
     if (!anchor) return;
+    const probeId =
+      anchor.platform === 'douyin' && anchor.roomId
+        ? anchor.roomId
+        : anchor.platformUid;
     const { results, allFailed } = await this.crawler.fetchStatuses(anchor.platform, [
-      anchor.platformUid,
+      probeId,
     ]);
     if (allFailed || !results[0]) return;
     const r = results[0];

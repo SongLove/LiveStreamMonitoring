@@ -72,25 +72,32 @@ export class QuotaService {
       throw err;
     }
 
-    const snap = await this.quotaModel.findOneAndUpdate(
-      { userId: userOid },
-      [
-        {
-          $set: {
-            balance: {
-              $min: [
-                maxBalance,
-                { $add: [{ $ifNull: ['$balance', 0] }, 1] },
-              ],
+    try {
+      const snap = await this.quotaModel.findOneAndUpdate(
+        { userId: userOid },
+        [
+          {
+            $set: {
+              balance: {
+                $min: [
+                  maxBalance,
+                  { $add: [{ $ifNull: ['$balance', 0] }, 1] },
+                ],
+              },
+              maxBalance,
             },
-            maxBalance,
           },
-        },
-      ],
-      { upsert: true, new: true },
-    );
+        ],
+        { upsert: true, new: true, updatePipeline: true },
+      );
 
-    return { granted: true, balance: snap?.balance ?? 0 };
+      return { granted: true, balance: snap?.balance ?? 0 };
+    } catch (err) {
+      await this.ledgerModel
+        .deleteOne({ idempotencyKey: params.idempotencyKey })
+        .catch(() => undefined);
+      throw err;
+    }
   }
 
   async deduct(userId: string, idempotencyKey: string, reason = 'notify_send'): Promise<boolean> {
@@ -147,7 +154,7 @@ export class QuotaService {
           },
         },
       ],
-      { upsert: true },
+      { upsert: true, updatePipeline: true },
     );
   }
 
@@ -196,7 +203,7 @@ export class QuotaService {
           },
         },
       ],
-      { upsert: true, new: true },
+      { upsert: true, new: true, updatePipeline: true },
     );
     return { balance: snap?.balance ?? 0 };
   }

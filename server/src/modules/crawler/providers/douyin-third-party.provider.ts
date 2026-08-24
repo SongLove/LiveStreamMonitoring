@@ -194,19 +194,8 @@ export class DouyinThirdPartyProvider implements LiveProvider {
   }
 
   async fetchStatus(uids: string[]): Promise<NormalizedLiveResult[]> {
-    if (!this.configured) {
-      return uids.map((uid) => ({
-        platform: 'douyin' as const,
-        platformUid: uid,
-        status: 'not_live' as const,
-        title: '',
-        coverUrl: '',
-        liveUrl: '',
-        provider: this.name,
-        fetchedAt: new Date(),
-        confidence: 0.5,
-      }));
-    }
+    // 未配置必须 skip，禁止伪造 not_live（否则短路链，Playwright 永远轮不到）
+    this.requireConfiguredOrSkip('探测抖音开播状态');
     try {
       const { data } = await axios.post(
         `${this.base}/douyin/live/batch`,

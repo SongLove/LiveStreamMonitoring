@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
+import { json, text } from 'express';
 import { AppApiModule } from './app.api.module';
 import { RedisService } from './common/redis/redis.service';
 import { setupSwagger } from './common/swagger/setup-swagger';
@@ -9,6 +10,15 @@ import { setupSwagger } from './common/swagger/setup-swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppApiModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
+  // 微信服务器推送为 text/xml；须在 json() 之前注册，否则 req.body 为空
+  app.use(
+    '/api/v1/wechat/callback',
+    text({
+      type: ['text/xml', 'application/xml', 'text/plain', 'application/json'],
+      limit: '1mb',
+    }),
+  );
+  app.use(json({ limit: '1mb' }));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

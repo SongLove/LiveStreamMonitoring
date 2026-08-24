@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { Anchor, Platform } from '@/types/api'
 import { anchorApi, subscriptionApi } from '@/api'
 import { useCategoryStore } from '@/stores/subscription'
+import { useProfileStore } from '@/stores/profile'
 import { trackEvent } from '@/utils/analytics'
 import { ApiError } from '@/utils/request'
 import { liveStateLabel, platformIdLabel } from '@/utils/format'
@@ -14,6 +15,7 @@ const selected = ref<Anchor | null>(null)
 const error = ref('')
 const loading = ref(false)
 const categoryStore = useCategoryStore()
+const profileStore = useProfileStore()
 
 const placeholder = computed(() =>
   platform.value === 'douyin'
@@ -76,15 +78,23 @@ async function onFollow() {
   try {
     await subscriptionApi.add(selected.value._id)
     trackEvent('follow_success')
-    uni.showModal({
-      title: '关注成功',
-      content: '是否现在授权推送次数？（需您主动点击确认）',
-      confirmText: '去授权',
-      success: (res) => {
-        if (res.confirm) uni.navigateTo({ url: '/pages-sub/quota/guide' })
-        else uni.navigateBack()
-      },
-    })
+    await profileStore.fetchProfile()
+
+    if (profileStore.quotaBalance <= 0) {
+      uni.showModal({
+        title: '关注成功',
+        content: '当前推送次数为 0，需先授权订阅消息才能收到开播提醒。',
+        confirmText: '去授权',
+        cancelText: '稍后',
+        success: (res) => {
+          if (res.confirm) uni.navigateTo({ url: '/pages-sub/quota/guide' })
+          else uni.navigateBack()
+        },
+      })
+    } else {
+      uni.showToast({ title: '关注成功', icon: 'success' })
+      setTimeout(() => uni.navigateBack(), 400)
+    }
   } catch (e: unknown) {
     const msg = e instanceof ApiError ? e.displayMessage : e instanceof Error ? e.message : '关注失败'
     uni.showToast({ title: msg, icon: 'none' })

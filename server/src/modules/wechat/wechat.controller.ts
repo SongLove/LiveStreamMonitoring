@@ -1,4 +1,14 @@
-import { Body, Controller, ForbiddenException, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -11,6 +21,7 @@ import { WechatService } from './wechat.service';
 import { JwtClientGuard } from '../../common/guards/jwt-client.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
+import { parseWechatCallbackBody } from './wechat-callback.parse';
 
 @ApiTags('微信回调')
 @Controller('api/v1/wechat')
@@ -48,18 +59,22 @@ export class WechatController {
   @ApiQuery({ name: 'timestamp', required: true })
   @ApiQuery({ name: 'nonce', required: true })
   @ApiResponse({ status: 201, description: '处理成功' })
-  async callback(@Req() req: Request, @Query() query: Record<string, string>) {
+  async callback(@Req() req: Request, @Query() query: Record<string, string>, @Res() res: Response) {
     if (!this.wechatService.verifyCallbackSignature(query)) {
-      return { ok: false };
+      return res.status(403).send('invalid signature');
     }
-    const body = req.body;
-    const event = String(body?.Event || body?.event || '').toLowerCase();
+    const raw = req.body;
+    const parsed = parseWechatCallbackBody(raw);
+    const event = parsed.event.toLowerCase();
     if (event.includes('subscribe_msg') && event.includes('sent')) {
-      await this.wechatService.handleNotifyResultCallback(body);
+      await this.wechatService.handleNotifyResultCallback(
+        typeof raw === 'object' && raw != null && !Array.isArray(raw) ? raw : parsed,
+      );
     } else {
-      await this.wechatService.handleSubscribeCallback(body);
+      await this.wechatService.handleSubscribeCallback(raw);
     }
-    return { ok: true };
+    // 微信要求明文 success；避免 TransformInterceptor 包一层 JSON
+    return res.status(200).send('success');
   }
 
   /**

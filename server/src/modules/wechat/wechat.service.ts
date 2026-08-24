@@ -4,6 +4,7 @@ import axios from 'axios';
 import { createHash } from 'crypto';
 import { WechatTokenService } from './wechat-token.service';
 import { normalizeWechatList } from '../../common/utils/normalize';
+import { parseWechatCallbackBody } from './wechat-callback.parse';
 import { QuotaService } from '../quota/quota.service';
 import { UserService } from '../user/user.service';
 import { InjectModel } from '@nestjs/mongoose';
@@ -55,14 +56,22 @@ export class WechatService {
     return hash === signature;
   }
 
-  async handleSubscribeCallback(body: any): Promise<{ processed: number }> {
-    const events = normalizeWechatList(body?.List || body?.list || body);
+  async handleSubscribeCallback(body: unknown): Promise<{ processed: number }> {
+    const parsed = parseWechatCallbackBody(body);
+    if (parsed.encrypted) {
+      this.logger.warn(
+        'WeChat callback is encrypted; set 明文模式 or implement AES decrypt (WECHAT_ENCODING_AES_KEY)',
+      );
+      return { processed: 0 };
+    }
+
+    const openid = parsed.fromUserName;
+    const createTime = parsed.createTime || String(Date.now());
     let processed = 0;
-    for (const item of events) {
-      const openid = item.OpenId || item.openid || body.FromUserName || body.fromUserName;
-      const templateId = item.TemplateId || item.templateId;
-      const status = (item.SubscribeStatusString || item.status || '').toLowerCase();
-      const createTime = String(item.PopupScene || item.createTime || Date.now());
+
+    for (const item of parsed.items) {
+      const templateId = item.templateId;
+      const status = item.status.toLowerCase();
       if (!openid || !templateId) continue;
 
       if (status === 'reject' || status === 'reject_with_no_dialog') {
@@ -71,20 +80,31 @@ export class WechatService {
         continue;
       }
 
-      if (status === 'accept') {
+      if (status === 'accept' || status === 'acceptwithforcepush') {
         await this.userService.setTemplateAuthByOpenId(openid, templateId, 'accept');
         const user = await this.userService.findByOpenId(openid);
         if (user) {
-          const idempotencyKey = `grant:${openid}:${templateId}:${createTime}`;
-          await this.quotaService.grantFromWechatCallback({
+          const idempotencyKey = `grant:${openid}:${templateId}:${createTime}:${item.popupScene || '0'}`;
+          const result = await this.quotaService.grantFromWechatCallback({
             userId: user.id,
             templateId,
             idempotencyKey,
-            meta: { source: 'wechat_callback' },
+            meta: { source: 'wechat_callback', event: parsed.event },
           });
+          this.logger.log(
+            `subscribe accept openid=${openid.slice(0, 8)}… granted=${result.granted} balance=${result.balance}`,
+          );
+        } else {
+          this.logger.warn(`subscribe accept but user not found for openid=${openid.slice(0, 8)}…`);
         }
         processed += 1;
       }
+    }
+
+    if (processed === 0 && (parsed.fromUserName || parsed.items.length > 0)) {
+      this.logger.warn(
+        `subscribe callback parsed but not processed event=${parsed.event} items=${parsed.items.length}`,
+      );
     }
     return { processed };
   }

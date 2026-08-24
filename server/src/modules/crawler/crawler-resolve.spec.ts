@@ -89,3 +89,104 @@ describe('ProviderChainService.resolveChain', () => {
     );
   });
 });
+
+describe('ProviderChainService.executeChain', () => {
+  it('skips unconfigured third-party and uses playwright fetchStatus', async () => {
+    const chain = new ProviderChainService();
+    const calls: string[] = [];
+    const third: LiveProvider = {
+      name: 'douyin-third-party',
+      platform: 'douyin',
+      healthCheck: async () => ({ ok: true }),
+      resolve: async () => {
+        throw new Error('n/a');
+      },
+      fetchStatus: async () => {
+        calls.push('third');
+        throw new ProviderSkippedError('douyin-third-party', 'not configured');
+      },
+    };
+    const sign: LiveProvider = {
+      name: 'douyin-signature-stub',
+      platform: 'douyin',
+      healthCheck: async () => ({ ok: false }),
+      resolve: async () => {
+        throw new ProviderSkippedError('douyin-signature-stub', 'stub');
+      },
+      fetchStatus: async () => {
+        calls.push('sign');
+        throw new ProviderSkippedError('douyin-signature-stub', 'stub');
+      },
+    };
+    const pw: LiveProvider = {
+      name: 'douyin-playwright',
+      platform: 'douyin',
+      healthCheck: async () => ({ ok: true }),
+      resolve: async () => {
+        throw new Error('n/a');
+      },
+      fetchStatus: async (uids) => {
+        calls.push('pw');
+        return uids.map((uid) => ({
+          platform: 'douyin' as const,
+          platformUid: uid,
+          status: 'live' as const,
+          title: '测试直播',
+          coverUrl: '',
+          liveUrl: `https://live.douyin.com/${uid}`,
+          provider: 'douyin-playwright',
+          fetchedAt: new Date(),
+          confidence: 0.9,
+        }));
+      },
+    };
+
+    const { results, allFailed } = await chain.executeChain(
+      [third, sign, pw],
+      ['kelie329157'],
+    );
+    expect(calls).toEqual(['third', 'sign', 'pw']);
+    expect(allFailed).toBe(false);
+    expect(results[0].status).toBe('live');
+    expect(results[0].provider).toBe('douyin-playwright');
+  });
+
+  it('does not treat forged not_live skip path: real not_live from pw is success', async () => {
+    const chain = new ProviderChainService();
+    const third: LiveProvider = {
+      name: 'douyin-third-party',
+      platform: 'douyin',
+      healthCheck: async () => ({ ok: true }),
+      resolve: async () => {
+        throw new Error('n/a');
+      },
+      fetchStatus: async () => {
+        throw new ProviderSkippedError('douyin-third-party', 'not configured');
+      },
+    };
+    const pw: LiveProvider = {
+      name: 'douyin-playwright',
+      platform: 'douyin',
+      healthCheck: async () => ({ ok: true }),
+      resolve: async () => {
+        throw new Error('n/a');
+      },
+      fetchStatus: async (uids) =>
+        uids.map((uid) => ({
+          platform: 'douyin' as const,
+          platformUid: uid,
+          status: 'not_live' as const,
+          title: '',
+          coverUrl: '',
+          liveUrl: `https://live.douyin.com/${uid}`,
+          provider: 'douyin-playwright',
+          fetchedAt: new Date(),
+          confidence: 0.9,
+        })),
+    };
+
+    const { results, allFailed } = await chain.executeChain([third, pw], ['x']);
+    expect(allFailed).toBe(false);
+    expect(results[0].status).toBe('not_live');
+  });
+});

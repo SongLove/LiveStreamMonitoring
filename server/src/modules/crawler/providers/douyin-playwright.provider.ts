@@ -13,10 +13,10 @@ import {
   ParsedDouyinBits,
   toNormalizedProfile,
 } from './douyin-profile-parse';
-import { ProviderSkippedError } from './provider-skip.error';
+import { parseDouyinLivePayload } from './douyin-live-parse';
 
 /**
- * Douyin profile via Playwright (nickname + avatar). Live status not implemented this round.
+ * Douyin via Playwright：resolve 拉昵称/头像；fetchStatus 探 live.douyin.com 开播状态。
  *
  * unique_id 策略：
  * 1) 优先打开 https://www.douyin.com/search/{id}?type=user
@@ -230,12 +230,145 @@ export class DouyinPlaywrightProvider implements LiveProvider {
     );
   }
 
-  async fetchStatus(_uids: string[]): Promise<NormalizedLiveResult[]> {
-    throw new ProviderSkippedError(
-      this.name,
-      'playwright live status not implemented',
-    );
+  /**
+   * 按直播间 web_rid（抖音号 / roomId）探测开播。
+   * 调度侧应传入 roomId 优先；结果 platformUid 回填为入参 id，便于双键匹配。
+   */
+  async fetchStatus(uids: string[]): Promise<NormalizedLiveResult[]> {
+    const out: NormalizedLiveResult[] = [];
+    for (const uid of uids) {
+      out.push(await this.probeOneLive(String(uid || '').trim()));
+    }
+    return out;
   }
+
+  private async probeOneLive(id: string): Promise<NormalizedLiveResult> {
+    const liveUrl = id
+      ? `https://live.douyin.com/${encodeURIComponent(id)}`
+      : '';
+    const failed = (): NormalizedLiveResult => ({
+      platform: 'douyin',
+      platformUid: id,
+      status: 'probe_failed',
+      title: '',
+      coverUrl: '',
+      liveUrl,
+      provider: this.name,
+      fetchedAt: new Date(),
+      confidence: 0,
+    });
+
+    if (!id) return failed();
+
+    try {
+      return await this.pool.withPage(async (page) => {
+        const captured: unknown[] = [];
+        page.on('response', async (res) => {
+          try {
+            const url = res.url();
+            if (!/live\.douyin\.com|webcast/i.test(url)) return;
+            if (!/room|enter|web\//i.test(url)) return;
+            const ct = res.headers()['content-type'] || '';
+            if (!ct.includes('json') && !ct.includes('javascript')) return;
+            const data = await res.json().catch(() => null);
+            if (data) captured.push(data);
+          } catch {
+            /* ignore */
+          }
+        });
+
+        this.logger.debug(`playwright probe live ${liveUrl}`);
+        await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
+        await sleep(4000);
+
+        for (const payload of captured) {
+          const parsed = parseDouyinLivePayload(payload);
+          if (parsed && parsed.status !== 'probe_failed') {
+            return {
+              platform: 'douyin',
+              platformUid: id,
+              status: parsed.status,
+              title: parsed.title,
+              coverUrl: parsed.coverUrl,
+              liveUrl,
+              provider: this.name,
+              fetchedAt: new Date(),
+              confidence: parsed.confidence,
+            };
+          }
+        }
+
+        const html = await page.content();
+        const fromHtml = parseDouyinLiveFromHtml(html);
+        if (fromHtml && fromHtml.status !== 'probe_failed') {
+          return {
+            platform: 'douyin',
+            platformUid: id,
+            status: fromHtml.status,
+            title: fromHtml.title,
+            coverUrl: fromHtml.coverUrl,
+            liveUrl,
+            provider: this.name,
+            fetchedAt: new Date(),
+            confidence: fromHtml.confidence,
+          };
+        }
+
+        this.logger.warn(`playwright probe no room_status for ${id}`);
+        return failed();
+      });
+    } catch (e) {
+      this.logger.error(
+        `playwright fetchStatus failed [${id}]: ${(e as Error).message}`,
+      );
+      return failed();
+    }
+  }
+}
+
+/** 从直播页 HTML 抽 SSR JSON 再解析开播状态 */
+export function parseDouyinLiveFromHtml(html: string) {
+  if (!html) return null;
+
+  const nextMatch = html.match(
+    /<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (nextMatch?.[1]) {
+    try {
+      const parsed = parseDouyinLivePayload(JSON.parse(nextMatch[1]));
+      if (parsed) return parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const renderMatch = html.match(
+    /<script[^>]*id=["']RENDER_DATA["'][^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (renderMatch?.[1]) {
+    try {
+      const decoded = decodeURIComponent(renderMatch[1].trim());
+      const parsed = parseDouyinLivePayload(JSON.parse(decoded));
+      if (parsed) return parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const scriptJsons = html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+  for (const m of scriptJsons) {
+    const body = (m[1] || '').trim();
+    if (!body.startsWith('{') && !body.startsWith('[')) continue;
+    if (!/room_status|status_str|"status"\s*:/i.test(body)) continue;
+    try {
+      const parsed = parseDouyinLivePayload(JSON.parse(body));
+      if (parsed) return parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return null;
 }
 
 function sleep(ms: number) {
