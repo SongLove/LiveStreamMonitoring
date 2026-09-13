@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import type { Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import {
   LiveProvider,
   NormalizedAnchorProfile,
@@ -9,11 +9,13 @@ import { assertDouyinUserId, parseDouyinInput } from './douyin-input';
 import { DouyinBrowserPool } from './douyin-browser.pool';
 import {
   extractUserFromJson,
+  extractOgImage,
+  hasAvatar,
   parseDouyinProfileFromHtml,
   ParsedDouyinBits,
   toNormalizedProfile,
 } from './douyin-profile-parse';
-import { parseDouyinLivePayload } from './douyin-live-parse';
+import { parseDouyinLivePayload, pickDouyinLiveProbe } from './douyin-live-parse';
 
 /**
  * Douyin via Playwright：resolve 拉昵称/头像；fetchStatus 探 live.douyin.com 开播状态。
@@ -68,11 +70,11 @@ export class DouyinPlaywrightProvider implements LiveProvider {
     idType: 'unique_id' | 'sec_uid',
   ): Promise<NormalizedAnchorProfile> {
     try {
-      return await this.pool.withPage(async (page) => {
+      return await this.pool.withPage(async (page, context) => {
         const captured: unknown[] = [];
-        this.attachCapture(page, captured);
 
         if (idType === 'sec_uid') {
+          page = await this.openPage(context, page, captured);
           await page.goto(`https://www.douyin.com/user/${id}`, {
             waitUntil: 'domcontentloaded',
           });
@@ -85,22 +87,65 @@ export class DouyinPlaywrightProvider implements LiveProvider {
           throw new BadRequestException(`未找到该抖音用户：${id}`);
         }
 
+        // unique_id：优先 live.douyin.com（单页、内存占用低），失败再走搜索页。
+        // 仅当已拿到头像才提前返回；无头像则继续搜索页（否则会出现「有昵称无头像」）。
+        const liveUrl = `https://live.douyin.com/${encodeURIComponent(id)}`;
+        this.logger.debug(`playwright open live first ${liveUrl}`);
+        page = await this.openPage(context, page, captured);
+        await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
+        await sleep(4000);
+        let softFallback: ParsedDouyinBits | null = null;
+        let found = this.pickFromCaptured(captured, id, idType);
+        if (found && hasAvatar(found)) return toNormalizedProfile(found, id);
+        if (found?.nickname) softFallback = found;
+        let html = await page.content();
+        let fromHtml = parseDouyinProfileFromHtml(html, id);
+        if (fromHtml && !hasAvatar(fromHtml)) {
+          const og = extractOgImage(html);
+          if (og) fromHtml = { ...fromHtml, avatarUrl: og };
+        }
+        if (fromHtml?.nickname && hasAvatar(fromHtml)) {
+          return toNormalizedProfile(fromHtml, id);
+        }
+        if (fromHtml?.nickname) softFallback = softFallback || fromHtml;
+        const title = await page.title();
+        const titleNick = title.match(/^(.+?)的抖音直播间/)?.[1]?.trim();
+        if (titleNick && titleNick !== id) {
+          softFallback =
+            softFallback ||
+            ({
+              nickname: titleNick,
+              avatarUrl: '',
+              secUid: '',
+              uniqueId: id,
+            } as ParsedDouyinBits);
+        }
+
         // 1) 产品约定：用户搜索页
         const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(id)}?type=user`;
         this.logger.debug(`playwright open search ${searchUrl}`);
+        page = await this.openPage(context, page, captured);
         await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
         await sleep(3500);
 
-        let found = this.pickFromCaptured(captured, id, idType);
-        if (found) return toNormalizedProfile(found, id);
+        found = this.pickFromCaptured(captured, id, idType);
+        if (found && hasAvatar(found)) return toNormalizedProfile(found, id);
+        if (found?.nickname) softFallback = softFallback || found;
 
         const searchHtml = await page.content();
         const fromSearchHtml = parseDouyinProfileFromHtml(searchHtml, id);
         if (
           fromSearchHtml?.nickname &&
+          hasAvatar(fromSearchHtml) &&
           this.matchesTarget(fromSearchHtml, id, idType)
         ) {
           return toNormalizedProfile(fromSearchHtml, id);
+        }
+        if (
+          fromSearchHtml?.nickname &&
+          this.matchesTarget(fromSearchHtml, id, idType)
+        ) {
+          softFallback = softFallback || fromSearchHtml;
         }
 
         // 真实用户主页链接（排除 /user/self）
@@ -110,46 +155,25 @@ export class DouyinPlaywrightProvider implements LiveProvider {
             ? profileHref
             : `https://www.douyin.com${profileHref}`;
           this.logger.debug(`playwright open user card ${abs}`);
+          page = await this.openPage(context, page, captured);
           await page.goto(abs, { waitUntil: 'domcontentloaded' });
           await sleep(2500);
           found = this.pickFromCaptured(captured, id, idType);
-          if (found) return toNormalizedProfile(found, id);
+          if (found && hasAvatar(found)) return toNormalizedProfile(found, id);
+          if (found?.nickname) softFallback = softFallback || found;
           const profileHtml = await page.content();
           const bits = parseDouyinProfileFromHtml(profileHtml, id);
-          if (bits?.nickname && this.matchesTarget(bits, id, idType)) {
+          if (bits?.nickname && hasAvatar(bits) && this.matchesTarget(bits, id, idType)) {
             return toNormalizedProfile(bits, id);
+          }
+          if (bits?.nickname && this.matchesTarget(bits, id, idType)) {
+            softFallback = softFallback || bits;
           }
         }
 
-        // 2) 搜索页空壳时：直播间页可按抖音号解析（含已下播）
-        const liveUrl = `https://live.douyin.com/${encodeURIComponent(id)}`;
-        this.logger.debug(`playwright fallback live ${liveUrl}`);
-        await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
-        await sleep(4000);
-        found = this.pickFromCaptured(captured, id, idType);
-        if (found) return toNormalizedProfile(found, id);
-
-        const liveHtml = await page.content();
-        const fromLiveHtml = parseDouyinProfileFromHtml(liveHtml, id);
-        if (fromLiveHtml?.nickname) {
-          return toNormalizedProfile(fromLiveHtml, id);
+        if (softFallback?.nickname) {
+          return toNormalizedProfile(softFallback, id);
         }
-
-        // 标题兜底：`克烈的抖音直播间 - 抖音直播`
-        const title = await page.title();
-        const titleNick = title.match(/^(.+?)的抖音直播间/)?.[1]?.trim();
-        if (titleNick && titleNick !== id) {
-          return toNormalizedProfile(
-            {
-              nickname: titleNick,
-              avatarUrl: '',
-              secUid: '',
-              uniqueId: id,
-            },
-            id,
-          );
-        }
-
         throw new BadRequestException(`未找到抖音号：${id}`);
       });
     } catch (e) {
@@ -176,6 +200,24 @@ export class DouyinPlaywrightProvider implements LiveProvider {
         /* ignore */
       }
     });
+  }
+
+  /** Close prior tab and open a fresh one to shed renderer memory between heavy navigations. */
+  private async openPage(
+    context: BrowserContext,
+    prior: Page,
+    captured: unknown[],
+  ): Promise<Page> {
+    captured.length = 0;
+    try {
+      await prior.close();
+    } catch {
+      /* ignore */
+    }
+    const page = await context.newPage();
+    page.setDefaultTimeout(this.pool.pageTimeoutMs);
+    this.attachCapture(page, captured);
+    return page;
   }
 
   private pickFromCaptured(
@@ -262,7 +304,7 @@ export class DouyinPlaywrightProvider implements LiveProvider {
 
     try {
       return await this.pool.withPage(async (page) => {
-        const captured: unknown[] = [];
+        const captured: { url: string; data: unknown }[] = [];
         page.on('response', async (res) => {
           try {
             const url = res.url();
@@ -271,7 +313,7 @@ export class DouyinPlaywrightProvider implements LiveProvider {
             const ct = res.headers()['content-type'] || '';
             if (!ct.includes('json') && !ct.includes('javascript')) return;
             const data = await res.json().catch(() => null);
-            if (data) captured.push(data);
+            if (data) captured.push({ url, data });
           } catch {
             /* ignore */
           }
@@ -281,25 +323,23 @@ export class DouyinPlaywrightProvider implements LiveProvider {
         await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
         await sleep(4000);
 
-        for (const payload of captured) {
-          const parsed = parseDouyinLivePayload(payload);
-          if (parsed && parsed.status !== 'probe_failed') {
-            return {
-              platform: 'douyin',
-              platformUid: id,
-              status: parsed.status,
-              title: parsed.title,
-              coverUrl: parsed.coverUrl,
-              liveUrl,
-              provider: this.name,
-              fetchedAt: new Date(),
-              confidence: parsed.confidence,
-            };
-          }
+        const picked = pickDouyinLiveProbe(captured, id);
+        if (picked) {
+          return {
+            platform: 'douyin',
+            platformUid: id,
+            status: picked.status,
+            title: picked.title,
+            coverUrl: picked.coverUrl,
+            liveUrl,
+            provider: this.name,
+            fetchedAt: new Date(),
+            confidence: picked.confidence,
+          };
         }
 
         const html = await page.content();
-        const fromHtml = parseDouyinLiveFromHtml(html);
+        const fromHtml = parseDouyinLiveFromHtml(html, id);
         if (fromHtml && fromHtml.status !== 'probe_failed') {
           return {
             platform: 'douyin',
@@ -327,7 +367,7 @@ export class DouyinPlaywrightProvider implements LiveProvider {
 }
 
 /** 从直播页 HTML 抽 SSR JSON 再解析开播状态 */
-export function parseDouyinLiveFromHtml(html: string) {
+export function parseDouyinLiveFromHtml(html: string, targetWebRid?: string) {
   if (!html) return null;
 
   const nextMatch = html.match(
@@ -335,7 +375,7 @@ export function parseDouyinLiveFromHtml(html: string) {
   );
   if (nextMatch?.[1]) {
     try {
-      const parsed = parseDouyinLivePayload(JSON.parse(nextMatch[1]));
+      const parsed = parseDouyinLivePayload(JSON.parse(nextMatch[1]), targetWebRid);
       if (parsed) return parsed;
     } catch {
       /* ignore */
@@ -348,7 +388,7 @@ export function parseDouyinLiveFromHtml(html: string) {
   if (renderMatch?.[1]) {
     try {
       const decoded = decodeURIComponent(renderMatch[1].trim());
-      const parsed = parseDouyinLivePayload(JSON.parse(decoded));
+      const parsed = parseDouyinLivePayload(JSON.parse(decoded), targetWebRid);
       if (parsed) return parsed;
     } catch {
       /* ignore */
@@ -361,7 +401,7 @@ export function parseDouyinLiveFromHtml(html: string) {
     if (!body.startsWith('{') && !body.startsWith('[')) continue;
     if (!/room_status|status_str|"status"\s*:/i.test(body)) continue;
     try {
-      const parsed = parseDouyinLivePayload(JSON.parse(body));
+      const parsed = parseDouyinLivePayload(JSON.parse(body), targetWebRid);
       if (parsed) return parsed;
     } catch {
       /* ignore */
@@ -384,9 +424,8 @@ export function isIncompleteDouyinProfile(doc: {
 }): boolean {
   const nick = (doc.nickname || '').trim();
   const avatar = (doc.avatarUrl || '').trim();
-  const uid = (doc.platformUid || '').trim();
-  const room = (doc.roomId || '').trim();
-  if (avatar) return false;
+  // 无头像一律视为不完整：搜索会重新 resolve（避免 live 页仅标题昵称入库后永久无头像）
+  if (!avatar) return true;
   if (!nick) return true;
-  return nick === uid || nick === room;
+  return false;
 }

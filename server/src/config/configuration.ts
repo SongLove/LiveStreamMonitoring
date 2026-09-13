@@ -42,6 +42,8 @@ export default () => ({
   live: {
     minRebroadcastMinutes: parseInt(process.env.LIVE_MIN_REBROADCAST_MINUTES || '30', 10),
     confirmOfflinePolls: parseInt(process.env.LIVE_CONFIRM_OFFLINE_POLLS || '2', 10),
+    /** live/pending 下连续 probe_failed 达此次数则强制 offline */
+    probeFailForceOffline: parseInt(process.env.LIVE_PROBE_FAIL_FORCE_OFFLINE || '3', 10),
   },
   bullBoard: {
     token: process.env.BULL_BOARD_TOKEN || '',

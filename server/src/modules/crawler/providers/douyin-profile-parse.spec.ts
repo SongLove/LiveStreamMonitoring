@@ -1,5 +1,7 @@
 import {
+  extractOgImage,
   extractUserFromJson,
+  hasAvatar,
   parseDouyinProfileFromHtml,
   toNormalizedProfile,
 } from './douyin-profile-parse';
@@ -56,9 +58,37 @@ describe('douyin-profile-parse', () => {
   });
 });
 
+describe('hasAvatar / extractOgImage', () => {
+  it('rejects empty avatar', () => {
+    expect(hasAvatar({ avatarUrl: '' })).toBe(false);
+    expect(hasAvatar(null)).toBe(false);
+  });
+
+  it('accepts non-empty avatar', () => {
+    expect(hasAvatar({ avatarUrl: 'https://cdn.example/a.jpg' })).toBe(true);
+  });
+
+  it('extracts og:image from html', () => {
+    const html =
+      '<meta property="og:image" content="https://cdn.example/og.jpg" />';
+    expect(extractOgImage(html)).toBe('https://cdn.example/og.jpg');
+  });
+});
+
 describe('isIncompleteDouyinProfile', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { isIncompleteDouyinProfile } = require('./douyin-playwright.provider');
+
+  it('flags missing avatar even with real nickname', () => {
+    expect(
+      isIncompleteDouyinProfile({
+        nickname: '克烈',
+        avatarUrl: '',
+        platformUid: 'MS4wLjABAAAA',
+        roomId: 'kelie329157',
+      }),
+    ).toBe(true);
+  });
 
   it('flags placeholder nick=uid without avatar', () => {
     expect(
@@ -69,17 +99,6 @@ describe('isIncompleteDouyinProfile', () => {
         roomId: 'kelie329157',
       }),
     ).toBe(true);
-  });
-
-  it('accepts real nickname even without avatar', () => {
-    expect(
-      isIncompleteDouyinProfile({
-        nickname: '克烈',
-        avatarUrl: '',
-        platformUid: 'MS4wLjABAAAA',
-        roomId: 'kelie329157',
-      }),
-    ).toBe(false);
   });
 
   it('accepts profile with avatar', () => {

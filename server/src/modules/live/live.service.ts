@@ -36,14 +36,17 @@ export class LiveService {
     status: NormalizedLiveStatus,
     meta: { provider: string; confidence: number; title?: string; coverUrl?: string; startedAt?: Date },
   ) {
-    if (status === 'probe_failed') {
-      this.logger.warn(`Probe failed for ${anchorId}, keep previous state`);
-      return { transition: 'none' as const };
-    }
-
-    const isLive = status === 'live';
     const anchor = await this.anchorModel.findById(anchorId);
     if (!anchor) return { transition: 'none' as const };
+
+    if (status === 'probe_failed') {
+      return this.handleProbeFailed(anchor);
+    }
+
+    // 成功探测：清零探测失败计数
+    anchor.consecutiveProbeFailed = 0;
+
+    const isLive = status === 'live';
 
     await this.redis.set(
       this.snapshotKey(anchorId),
@@ -80,13 +83,10 @@ export class LiveService {
     if (anchor.liveState === 'live' || anchor.liveState === 'pending_confirm') {
       anchor.consecutiveOffline += 1;
       if (anchor.consecutiveOffline >= confirmOffline) {
-        anchor.liveState = 'offline';
-        await this.sessionModel.updateMany(
-          { anchorId: anchor._id, status: 'live' },
-          { $set: { status: 'ended', endedAt: new Date() } },
-        );
+        await this.markOffline(anchor);
+      } else {
+        await anchor.save();
       }
-      await anchor.save();
       return { transition: 'offline_progress' as const };
     }
 
@@ -95,16 +95,64 @@ export class LiveService {
     return { transition: 'offline' as const };
   }
 
+  /**
+   * 探测失败：默认保持原状态；若当前为 live/pending 且连续失败达阈值，强制下播。
+   * 避免 Playwright 崩溃时列表永久卡在「直播中」。
+   */
+  private async handleProbeFailed(anchor: AnchorDocument) {
+    const threshold = this.config.get<number>('live.probeFailForceOffline') || 3;
+    const wasShowingLive =
+      anchor.liveState === 'live' || anchor.liveState === 'pending_confirm';
+
+    if (!wasShowingLive) {
+      this.logger.warn(`Probe failed for ${anchor.id}, keep offline`);
+      return { transition: 'probe_failed' as const };
+    }
+
+    anchor.consecutiveProbeFailed = (anchor.consecutiveProbeFailed || 0) + 1;
+    if (anchor.consecutiveProbeFailed < threshold) {
+      this.logger.warn(
+        `Probe failed for ${anchor.id} (${anchor.consecutiveProbeFailed}/${threshold}), keep ${anchor.liveState}`,
+      );
+      await anchor.save();
+      return { transition: 'probe_failed' as const };
+    }
+
+    this.logger.warn(
+      `Probe failed ${anchor.consecutiveProbeFailed}x for ${anchor.id}, force offline`,
+    );
+    await this.markOffline(anchor);
+    return { transition: 'force_offline' as const };
+  }
+
+  private async markOffline(anchor: AnchorDocument) {
+    anchor.liveState = 'offline';
+    anchor.consecutiveProbeFailed = 0;
+    await this.sessionModel.updateMany(
+      { anchorId: anchor._id, status: 'live' },
+      { $set: { status: 'ended', endedAt: new Date() } },
+    );
+    await anchor.save();
+  }
+
   private async confirmLive(
     anchor: AnchorDocument,
     meta: { provider: string; title?: string; coverUrl?: string; startedAt?: Date },
     minRebroadcast: number,
   ) {
-    if (anchor.lastLiveAt) {
+    // 仅当「上一场 session 仍在 live」时才抑制重复推送；已下播后再次开播必须通知
+    const activeSession = await this.sessionModel.findOne({
+      anchorId: anchor._id,
+      status: 'live',
+    });
+    if (activeSession && anchor.lastLiveAt) {
       const diff = Date.now() - new Date(anchor.lastLiveAt).getTime();
       if (diff < minRebroadcast * 60_000) {
         anchor.liveState = 'live';
         await anchor.save();
+        this.logger.log(
+          `rebroadcast_cooldown anchor=${anchor.id} activeSession=${activeSession.id}`,
+        );
         return { transition: 'rebroadcast_cooldown' as const };
       }
     }
@@ -128,6 +176,9 @@ export class LiveService {
         session = await this.sessionModel.findOne({ sessionKey });
         anchor.liveState = 'live';
         await anchor.save();
+        if (session?.id) {
+          await this.enqueueNotifyDispatch(String(session.id), String(anchor._id));
+        }
         return { transition: 'session_exists' as const, sessionId: session?.id };
       }
       throw err;
@@ -139,13 +190,20 @@ export class LiveService {
     if (meta.coverUrl) anchor.coverUrl = meta.coverUrl;
     await anchor.save();
 
-    await this.notifyDispatch.add(
-      'dispatch',
-      { sessionId: session.id, anchorId: String(anchor._id) },
-      { jobId: `dispatch:${session.id}` },
+    await this.enqueueNotifyDispatch(String(session.id), String(anchor._id));
+    this.logger.log(
+      `live confirmed anchor=${anchor.id} session=${session.id} → notify dispatch`,
     );
 
     return { transition: 'live' as const, sessionId: session.id };
+  }
+
+  private async enqueueNotifyDispatch(sessionId: string, anchorId: string) {
+    await this.notifyDispatch.add(
+      'dispatch',
+      { sessionId, anchorId },
+      { jobId: `dispatch:${sessionId}` },
+    );
   }
 
   async listForUser(userId: string, page = 1, pageSize = 20) {

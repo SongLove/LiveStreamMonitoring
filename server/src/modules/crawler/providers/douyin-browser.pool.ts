@@ -2,6 +2,14 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Browser, BrowserContext, Page } from 'playwright';
 
+/** Chromium renderer/tab died — common in Docker when /dev/shm or RAM is tight. */
+export function isPlaywrightTargetCrashError(err: unknown): boolean {
+  const msg = (err as Error)?.message || String(err);
+  return /target crashed|target closed|browser has been closed|session closed|page crashed/i.test(
+    msg,
+  );
+}
+
 /**
  * Process-wide Chromium + concurrency slot for Douyin profile fetches.
  * Docker: set DOUYIN_PW_EXECUTABLE_PATH=/usr/bin/chromium
@@ -21,6 +29,11 @@ export class DouyinBrowserPool implements OnModuleDestroy {
 
   private get navigationTimeoutMs() {
     return this.config.get<number>('douyin.playwrightTimeoutMs') || 20_000;
+  }
+
+  /** Exposed for providers that recycle tabs inside one context. */
+  get pageTimeoutMs() {
+    return this.navigationTimeoutMs;
   }
 
   private get headless() {
@@ -65,11 +78,37 @@ export class DouyinBrowserPool implements OnModuleDestroy {
         '--disable-blink-features=AutomationControlled',
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        // Prefer Playwright temp dir over tiny Docker /dev/shm (compose should still set shm_size≥512m)
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--disable-accelerated-2d-canvas',
+        '--disable-background-networking',
+        '--disable-breakpad',
       ],
     });
+    this.browser.on('disconnected', () => {
+      this.logger.warn('chromium disconnected');
+      this.browser = null;
+    });
     return this.browser;
+  }
+
+  private async newContext(browser: Browser): Promise<BrowserContext> {
+    const context = await browser.newContext({
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      locale: 'zh-CN',
+      viewport: { width: 1280, height: 720 },
+    });
+    // Douyin pages are heavy; drop video/image payloads to reduce renderer OOM in small containers.
+    await context.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (type === 'image' || type === 'media') {
+        return route.abort();
+      }
+      return route.continue();
+    });
+    return context;
   }
 
   private async acquireSlot(waitMs: number): Promise<void> {
@@ -99,19 +138,34 @@ export class DouyinBrowserPool implements OnModuleDestroy {
 
   /**
    * Run work with a fresh context+page; always releases the concurrency slot.
+   * Retries once after relaunching Chromium when the tab/renderer crashes.
    */
   async withPage<T>(fn: (page: Page, context: BrowserContext) => Promise<T>): Promise<T> {
     const waitMs = this.navigationTimeoutMs;
     await this.acquireSlot(waitMs);
+    try {
+      try {
+        return await this.runWithPage(fn);
+      } catch (err) {
+        if (!isPlaywrightTargetCrashError(err)) throw err;
+        this.logger.warn(
+          `Playwright target crashed, relaunching browser: ${(err as Error).message}`,
+        );
+        await this.close();
+        return await this.runWithPage(fn);
+      }
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  private async runWithPage<T>(
+    fn: (page: Page, context: BrowserContext) => Promise<T>,
+  ): Promise<T> {
     let context: BrowserContext | null = null;
     try {
       const browser = await this.ensureBrowser();
-      context = await browser.newContext({
-        userAgent:
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        locale: 'zh-CN',
-        viewport: { width: 1280, height: 720 },
-      });
+      context = await this.newContext(browser);
       const page = await context.newPage();
       page.setDefaultTimeout(this.navigationTimeoutMs);
       return await fn(page, context);
@@ -121,7 +175,6 @@ export class DouyinBrowserPool implements OnModuleDestroy {
       } catch {
         /* ignore */
       }
-      this.releaseSlot();
     }
   }
 }

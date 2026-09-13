@@ -20,6 +20,9 @@ const TIER_INTERVAL_MS: Record<number, number> = {
   3: 180_000,
 };
 
+/** 探测失败时缩短下次轮询，尽快恢复真实状态 */
+const PROBE_FAIL_RETRY_MS = 20_000;
+
 @Injectable()
 export class SchedulerBootstrap implements OnModuleInit {
   private readonly logger = new Logger(SchedulerBootstrap.name);
@@ -100,6 +103,8 @@ export class PollScheduleProcessor extends WorkerHost {
 
 @Processor(QUEUE_NAMES.POLL_EXECUTE)
 export class PollExecuteProcessor extends WorkerHost {
+  private readonly logger = new Logger(PollExecuteProcessor.name);
+
   constructor(
     @InjectModel(Anchor.name) private readonly anchorModel: Model<AnchorDocument>,
     private readonly crawler: CrawlerService,
@@ -126,20 +131,27 @@ export class PollExecuteProcessor extends WorkerHost {
     }
     const byUid = new Map(results.map((r) => [r.platformUid, r]));
     for (const a of anchors) {
-      const interval = TIER_INTERVAL_MS[a.pollTier] || 60_000;
-      a.lastPolledAt = new Date(Date.now() + interval);
-      await a.save();
-      if (allFailed) continue;
       const r =
         byUid.get(a.platformUid) ||
         (a.roomId ? byUid.get(a.roomId) : undefined);
-      if (!r) continue;
-      await this.liveService.applyProbeResult(String(a._id), r.status, {
-        provider: r.provider,
-        confidence: r.confidence,
-        title: r.title,
-        coverUrl: r.coverUrl,
-        startedAt: r.startedAt,
+      const status = r?.status ?? 'probe_failed';
+      const failed = allFailed || status === 'probe_failed' || !r;
+      const interval = failed
+        ? PROBE_FAIL_RETRY_MS
+        : TIER_INTERVAL_MS[a.pollTier] || 60_000;
+      a.lastPolledAt = new Date(Date.now() + interval);
+      await a.save();
+
+      if (a.platform === 'douyin' && !a.roomId) {
+        this.logger.warn(`douyin anchor ${a._id} missing roomId, probe may fail`);
+      }
+
+      await this.liveService.applyProbeResult(String(a._id), status, {
+        provider: r?.provider || 'none',
+        confidence: r?.confidence ?? 0,
+        title: r?.title,
+        coverUrl: r?.coverUrl,
+        startedAt: r?.startedAt,
       });
     }
   }

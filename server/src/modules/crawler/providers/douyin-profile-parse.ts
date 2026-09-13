@@ -29,7 +29,9 @@ function fromUserObject(user: Record<string, unknown>, fallbackId: string): Pars
     pickAvatar(user.avatar_medium) ||
     pickAvatar(user.avatar_thumb) ||
     pickAvatar(user.avatar_300x300) ||
-    String(user.avatar_url || user.avatar || '');
+    pickAvatar(user.avatar_uri) ||
+    pickAvatar(user.AvatarThumb) ||
+    String(user.avatar_url || user.avatar || user.avatar_uri || '');
 
   if (!nickname && !secUid && !uniqueId) return null;
   return { nickname, avatarUrl: avatar, secUid, uniqueId };
@@ -129,4 +131,24 @@ export function toNormalizedProfile(
       ? `https://www.douyin.com/user/${bits.secUid}`
       : `https://www.douyin.com/search/${encodeURIComponent(uniqueId)}?type=user`,
   };
+}
+
+/** True when profile carries a non-empty avatar URL. */
+export function hasAvatar(bits: { avatarUrl?: string } | null | undefined): boolean {
+  return Boolean(bits?.avatarUrl?.trim());
+}
+
+/** Pull og:image from HTML as avatar fallback (live pages often expose it). */
+export function extractOgImage(html: string): string {
+  if (!html) return '';
+  const m =
+    html.match(
+      /property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
+    ) ||
+    html.match(
+      /content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
+    );
+  const url = (m?.[1] || '').trim();
+  if (!url || url.startsWith('data:')) return '';
+  return url;
 }

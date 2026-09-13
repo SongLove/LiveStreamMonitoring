@@ -50,7 +50,7 @@ services:
       REDIS_PORT: "6379"
       DOUYIN_PW_EXECUTABLE_PATH: /usr/bin/chromium
       DOUYIN_PW_HEADLESS: "true"
-    shm_size: "256mb"
+    shm_size: "1gb"
     ports:
       - "4000:4000"
     depends_on:
@@ -89,7 +89,7 @@ services:
       REDIS_PORT: "6379"
       DOUYIN_PW_EXECUTABLE_PATH: /usr/bin/chromium
       DOUYIN_PW_HEADLESS: "true"
-    shm_size: "256mb"
+    shm_size: "1gb"
     depends_on:
       mongo:
         condition: service_healthy

@@ -50,6 +50,10 @@ export class Anchor {
   @Prop({ default: 0 })
   consecutiveOffline!: number;
 
+  /** 连续探测失败次数；达阈值后强制下播，避免 live 卡死 */
+  @Prop({ default: 0 })
+  consecutiveProbeFailed!: number;
+
   @Prop({ type: Date, default: null })
   lastLiveAt!: Date | null;
 

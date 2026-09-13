@@ -190,3 +190,13 @@ describe('ProviderChainService.executeChain', () => {
     expect(results[0].status).toBe('not_live');
   });
 });
+
+describe('isPlaywrightTargetCrashError', () => {
+  const { isPlaywrightTargetCrashError } = require('./providers/douyin-browser.pool');
+
+  it('detects renderer crash messages', () => {
+    expect(isPlaywrightTargetCrashError(new Error('page.content: Target crashed'))).toBe(true);
+    expect(isPlaywrightTargetCrashError(new Error('Target closed'))).toBe(true);
+    expect(isPlaywrightTargetCrashError(new Error('timeout'))).toBe(false);
+  });
+});
