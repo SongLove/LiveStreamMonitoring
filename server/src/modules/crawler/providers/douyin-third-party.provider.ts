@@ -233,9 +233,22 @@ export class DouyinThirdPartyProvider implements LiveProvider {
 
 function pickAvatar(node: any): string {
   if (!node) return '';
-  if (typeof node === 'string') return node;
+  if (typeof node === 'string') {
+    const s = node.trim();
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return `https:${s}`;
+    return '';
+  }
   const list = node.url_list || node.urlList;
-  if (Array.isArray(list) && list[0]) return String(list[0]);
-  if (node.uri) return String(node.uri);
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const s = String(item || '').trim();
+      if (/^https?:\/\//i.test(s)) return s;
+      if (s.startsWith('//')) return `https:${s}`;
+    }
+  }
+  const uri = String(node.uri || node.url || '').trim();
+  if (/^https?:\/\//i.test(uri)) return uri;
+  if (uri.startsWith('//')) return `https:${uri}`;
   return '';
 }

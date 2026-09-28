@@ -7,15 +7,28 @@ export type ParsedDouyinBits = {
   uniqueId: string;
 };
 
+/** 只接受可直接给小程序 <image> 用的绝对 URL */
+function asHttpUrl(raw: unknown): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  return '';
+}
+
 function pickAvatar(node: unknown): string {
   if (!node) return '';
-  if (typeof node === 'string') return node;
+  if (typeof node === 'string') return asHttpUrl(node);
   if (typeof node !== 'object') return '';
   const o = node as Record<string, unknown>;
   const list = o.url_list || o.urlList;
-  if (Array.isArray(list) && list[0]) return String(list[0]);
-  if (o.uri) return String(o.uri);
-  return '';
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const url = asHttpUrl(item);
+      if (url) return url;
+    }
+  }
+  return asHttpUrl(o.uri) || asHttpUrl(o.url);
 }
 
 function fromUserObject(user: Record<string, unknown>, fallbackId: string): ParsedDouyinBits | null {
@@ -29,20 +42,25 @@ function fromUserObject(user: Record<string, unknown>, fallbackId: string): Pars
     pickAvatar(user.avatar_medium) ||
     pickAvatar(user.avatar_thumb) ||
     pickAvatar(user.avatar_300x300) ||
+    pickAvatar(user.avatar_168x168) ||
     pickAvatar(user.avatar_uri) ||
     pickAvatar(user.AvatarThumb) ||
-    String(user.avatar_url || user.avatar || user.avatar_uri || '');
+    asHttpUrl(user.avatar_url) ||
+    asHttpUrl(user.avatar) ||
+    asHttpUrl(user.avatar_uri);
 
   if (!nickname && !secUid && !uniqueId) return null;
   return { nickname, avatarUrl: avatar, secUid, uniqueId };
 }
 
-/** Walk nested JSON looking for a user-like object with nickname + id. */
+/** Walk nested JSON looking for a user-like object with nickname + id. Prefer ones with avatar. */
 export function extractUserFromJson(payload: unknown, fallbackId = ''): ParsedDouyinBits | null {
   if (!payload || typeof payload !== 'object') return null;
 
   const queue: unknown[] = [payload];
   const seen = new Set<unknown>();
+  let bestWithoutAvatar: ParsedDouyinBits | null = null;
+
   while (queue.length) {
     const cur = queue.shift();
     if (!cur || typeof cur !== 'object' || seen.has(cur)) continue;
@@ -53,14 +71,17 @@ export function extractUserFromJson(payload: unknown, fallbackId = ''): ParsedDo
     const hasId = Boolean(o.sec_uid || o.secUid || o.unique_id || o.uniqueId);
     if (hasNick && hasId) {
       const parsed = fromUserObject(o, fallbackId);
-      if (parsed?.nickname) return parsed;
+      if (parsed?.nickname) {
+        if (hasAvatar(parsed)) return parsed;
+        if (!bestWithoutAvatar) bestWithoutAvatar = parsed;
+      }
     }
 
     for (const v of Object.values(o)) {
       if (v && typeof v === 'object') queue.push(v);
     }
   }
-  return null;
+  return bestWithoutAvatar;
 }
 
 /**

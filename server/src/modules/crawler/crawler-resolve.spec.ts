@@ -76,6 +76,37 @@ describe('ProviderChainService.resolveChain', () => {
     expect(profile.nickname).toBe('API昵称');
   });
 
+  it('falls through when first provider returns profile without avatar', async () => {
+    const chain = new ProviderChainService();
+    const calls: string[] = [];
+    const third = mockProvider('douyin-third-party', async () => {
+      calls.push('third');
+      return {
+        platform: 'douyin',
+        platformUid: 'sec_incomplete',
+        roomId: 'kelie329157',
+        nickname: '无头像昵称',
+        avatarUrl: '',
+        profileUrl: 'https://www.douyin.com/user/sec_incomplete',
+      };
+    });
+    const pw = mockProvider('douyin-playwright', async () => {
+      calls.push('pw');
+      return {
+        platform: 'douyin',
+        platformUid: 'MS4wLjABAAAAreal',
+        roomId: 'kelie329157',
+        nickname: '有头像昵称',
+        avatarUrl: 'https://cdn.example/pw.jpg',
+        profileUrl: 'https://www.douyin.com/user/MS4wLjABAAAAreal',
+      };
+    });
+
+    const profile = await chain.resolveChain([third, pw], 'kelie329157');
+    expect(calls).toEqual(['third', 'pw']);
+    expect(profile.avatarUrl).toBe('https://cdn.example/pw.jpg');
+  });
+
   it('surfaces BadRequestException from last provider', async () => {
     const chain = new ProviderChainService();
     const third = mockProvider('douyin-third-party', async () => {

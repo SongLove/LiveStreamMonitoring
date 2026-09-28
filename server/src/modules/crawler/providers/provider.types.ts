@@ -1,4 +1,4 @@
-export type Platform = 'bilibili' | 'douyin';
+export type Platform = 'bilibili' | 'douyin' | 'kuaishou';
 
 /** Unified live status — carousel maps to not_live, never to live. */
 export type NormalizedLiveStatus = 'live' | 'not_live' | 'carousel' | 'probe_failed';

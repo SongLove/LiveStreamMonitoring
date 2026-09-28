@@ -15,7 +15,7 @@ export class CrawlerService {
   ) {}
 
   async resolve(platform: Platform, input: string) {
-    if (platform === 'bilibili') {
+    if (platform === 'bilibili' || platform === 'kuaishou') {
       return this.registry.primary(platform).resolve(input);
     }
     return this.chain.resolveChain(this.registry.chain(platform), input);
@@ -44,7 +44,7 @@ export class CrawlerService {
     uids: string[],
   ): Promise<{ results: NormalizedLiveResult[]; allFailed: boolean; deferred?: boolean }> {
     const bucket = `ratelimit:${platform}`;
-    const rate = platform === 'bilibili' ? 10 : 5;
+    const rate = platform === 'bilibili' ? 10 : platform === 'kuaishou' ? 3 : 5;
     const allowed = await this.redis.takeToken(bucket, rate, rate * 2);
     if (!allowed) {
       this.logger.warn(`Rate limited ${platform}`);

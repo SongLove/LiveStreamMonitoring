@@ -4,7 +4,7 @@ import { HydratedDocument } from 'mongoose';
 export type AnchorDocument = HydratedDocument<Anchor>;
 
 export type AnchorLiveState = 'offline' | 'pending_confirm' | 'live';
-export type Platform = 'bilibili' | 'douyin';
+export type Platform = 'bilibili' | 'douyin' | 'kuaishou';
 
 @Schema({ timestamps: true, collection: 'anchors' })
 export class Anchor {

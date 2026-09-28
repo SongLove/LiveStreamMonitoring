@@ -16,8 +16,8 @@ import { Platform } from './anchor.schema';
 import { ApiResponseDto } from '../../common/swagger/api-response.dto';
 
 export class ResolveAnchorDto {
-  @ApiProperty({ enum: ['bilibili', 'douyin'], example: 'bilibili' })
-  @IsIn(['bilibili', 'douyin'])
+  @ApiProperty({ enum: ['bilibili', 'douyin', 'kuaishou'], example: 'kuaishou' })
+  @IsIn(['bilibili', 'douyin', 'kuaishou'])
   platform!: Platform;
 
   @ApiProperty({
@@ -37,7 +37,7 @@ export class AnchorController {
 
   @Get('search')
   @ApiOperation({ summary: '搜索主播', description: '先查本地池，未命中可调 Provider 解析（限流）' })
-  @ApiQuery({ name: 'platform', enum: ['bilibili', 'douyin'], required: false })
+  @ApiQuery({ name: 'platform', enum: ['bilibili', 'douyin', 'kuaishou'], required: false })
   @ApiQuery({ name: 'q', description: '搜索关键词', example: '某某主播' })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

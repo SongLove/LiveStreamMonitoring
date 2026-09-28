@@ -225,11 +225,12 @@ export class DouyinPlaywrightProvider implements LiveProvider {
     id: string,
     idType: 'unique_id' | 'sec_uid',
   ): ParsedDouyinBits | null {
+    let soft: ParsedDouyinBits | null = null;
     for (const payload of captured) {
       const bits = extractUserFromJson(payload, id);
-      if (bits?.nickname && this.matchesTarget(bits, id, idType)) {
-        return bits;
-      }
+      if (!bits?.nickname || !this.matchesTarget(bits, id, idType)) continue;
+      if (hasAvatar(bits)) return bits;
+      if (!soft) soft = bits;
     }
     for (const payload of captured) {
       const bits = extractUserFromJson(payload, id);
@@ -238,10 +239,11 @@ export class DouyinPlaywrightProvider implements LiveProvider {
         idType === 'unique_id' &&
         bits.uniqueId.toLowerCase() === id.toLowerCase()
       ) {
-        return bits;
+        if (hasAvatar(bits)) return bits;
+        if (!soft) soft = bits;
       }
     }
-    return null;
+    return soft;
   }
 
   private async findRealUserHref(page: Page): Promise<string | null> {

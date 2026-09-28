@@ -26,6 +26,42 @@ describe('douyin-profile-parse', () => {
     });
   });
 
+  it('prefers candidate with http avatar over earlier nickname-only node', () => {
+    const payload = {
+      recommend: {
+        nickname: '推荐位占位',
+        unique_id: 'kelie329157',
+        sec_uid: 'MS4wLjABAAAAplaceholder',
+        // 相对 uri，不能当头像 URL
+        avatar_thumb: { uri: '100x100/aweme-avatar/tos-cn-i-xxx' },
+      },
+      owner: {
+        nickname: '可乐测试号',
+        unique_id: 'kelie329157',
+        sec_uid: 'MS4wLjABAAAAtestdouyinuid',
+        avatar_thumb: { url_list: ['https://cdn.example/real.jpg'] },
+      },
+    };
+    const bits = extractUserFromJson(payload, 'kelie329157');
+    expect(bits?.avatarUrl).toBe('https://cdn.example/real.jpg');
+    expect(bits?.nickname).toBe('可乐测试号');
+  });
+
+  it('ignores non-http avatar uri', () => {
+    const bits = extractUserFromJson(
+      {
+        user: {
+          nickname: '仅相对路径',
+          unique_id: 'kelie329157',
+          sec_uid: 'MS4wLjABAAAA',
+          avatar_thumb: { uri: '100x100/aweme-avatar/tos-cn-i-xxx' },
+        },
+      },
+      'kelie329157',
+    );
+    expect(bits?.avatarUrl).toBe('');
+  });
+
   it('parses __NEXT_DATA__ html', () => {
     const html = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
       sampleUser,

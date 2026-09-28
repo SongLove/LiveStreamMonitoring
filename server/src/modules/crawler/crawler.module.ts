@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BilibiliProvider } from './providers/bilibili.provider';
+import { KuaishouProvider } from './providers/kuaishou.provider';
 import { DouyinThirdPartyProvider } from './providers/douyin-third-party.provider';
 import { DouyinSignatureStubProvider } from './providers/douyin-signature.stub';
 import { DouyinPlaywrightProvider } from './providers/douyin-playwright.provider';
@@ -18,6 +19,7 @@ import { PlatformConfig, PlatformConfigSchema } from './platform-config.schema';
   ],
   providers: [
     BilibiliProvider,
+    KuaishouProvider,
     DouyinThirdPartyProvider,
     DouyinSignatureStubProvider,
     DouyinBrowserPool,

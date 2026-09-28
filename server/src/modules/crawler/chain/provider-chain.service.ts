@@ -35,12 +35,14 @@ export class ProviderChainService {
     if (openUntil) this.logger.warn(`Circuit open for ${name}`);
   }
 
-  /** Profile resolve: third-party → signature → playwright. Skip does not trip circuit. */
+  /** Profile resolve: third-party → signature → playwright. Skip does not trip circuit.
+   * 无头像的成功响应视为半成品，继续试下一链（避免 TikHub/占位资料短路 Playwright）。 */
   async resolveChain(
     providers: LiveProvider[],
     input: string,
   ): Promise<NormalizedAnchorProfile> {
     let lastError: Error | undefined;
+    let softProfile: NormalizedAnchorProfile | undefined;
     for (const p of providers) {
       if (this.isOpen(p.name)) {
         this.logger.debug(`resolve skip open circuit: ${p.name}`);
@@ -49,7 +51,11 @@ export class ProviderChainService {
       try {
         const profile = await p.resolve(input);
         this.recordSuccess(p.name);
-        return profile;
+        if ((profile.avatarUrl || '').trim()) return profile;
+        softProfile = softProfile || profile;
+        this.logger.debug(
+          `${p.name} resolve ok but empty avatar, try next provider`,
+        );
       } catch (e) {
         if (isProviderSkippedError(e)) {
           this.logger.debug(e.message);
@@ -60,6 +66,7 @@ export class ProviderChainService {
         this.logger.warn(`${p.name} resolve failed: ${lastError.message}`);
       }
     }
+    if (softProfile) return softProfile;
     if (lastError instanceof BadRequestException) throw lastError;
     throw new BadRequestException(
       lastError?.message || '拉取抖音资料失败，请稍后重试',
