@@ -25,6 +25,9 @@ export function platformIdLabel(
   if (platform === 'douyin') {
     return `抖音号: ${roomId || platformUid}`
   }
+  if (platform === 'kuaishou') {
+    return `快手号: ${roomId || platformUid}`
+  }
   return `UID: ${platformUid}`
 }
 

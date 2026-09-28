@@ -17,19 +17,25 @@ const loading = ref(false)
 const categoryStore = useCategoryStore()
 const profileStore = useProfileStore()
 
-const placeholder = computed(() =>
-  platform.value === 'douyin'
-    ? '输入抖音号，例如 kelie329157'
-    : '输入 B 站 UID，或粘贴直播间/空间链接',
-)
+const placeholder = computed(() => {
+  if (platform.value === 'douyin') return '输入抖音号，例如 kelie329157'
+  if (platform.value === 'kuaishou') return '输入快手号，或粘贴 live.kuaishou.com/u/快手号'
+  return '输入 B 站 UID，或粘贴直播间/空间链接'
+})
 
-const tip = computed(() =>
-  platform.value === 'douyin'
-    ? '按抖音号（用户 ID）搜索，例如 kelie329157。主页里「抖音号」那一串，不是昵称。'
-    : '按 UID 搜索：支持数字 UID 或直播间/空间链接。',
-)
+const tip = computed(() => {
+  if (platform.value === 'douyin') {
+    return '按抖音号（用户 ID）搜索，例如 kelie329157。主页里「抖音号」那一串，不是昵称。'
+  }
+  if (platform.value === 'kuaishou') {
+    return '按快手号搜索（直播间链接末尾那串），不是昵称。'
+  }
+  return '按 UID 搜索：支持数字 UID 或直播间/空间链接。'
+})
 
-const actionLabel = computed(() => (platform.value === 'douyin' ? '按 ID 搜索' : '搜索'))
+const actionLabel = computed(() =>
+  platform.value === 'bilibili' ? '搜索' : '按 ID 搜索',
+)
 
 watch(platform, () => {
   results.value = []
@@ -110,6 +116,7 @@ categoryStore.fetchCategories()
   <view class="page-wrap">
     <view class="platform-tabs">
       <view class="p-tab" :class="{ active: platform === 'douyin' }" @tap="platform = 'douyin'">抖音</view>
+      <view class="p-tab" :class="{ active: platform === 'kuaishou' }" @tap="platform = 'kuaishou'">快手</view>
       <view class="p-tab" :class="{ active: platform === 'bilibili' }" @tap="platform = 'bilibili'">哔哩哔哩</view>
     </view>
 

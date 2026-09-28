@@ -1,8 +1,12 @@
-# 与 docker-compose.yml 叠加：镜像改为拷贝 dist，不在服务器编译 TypeScript
+# 与 docker-compose.yml 叠加：运行时镜像 + 挂载 dist（更新代码不用重建镜像）
 services:
   api:
     build:
       dockerfile: Dockerfile.runtime
+    volumes:
+      - ./dist:/app/dist:ro
   worker:
     build:
       dockerfile: Dockerfile.runtime
+    volumes:
+      - ./dist:/app/dist:ro

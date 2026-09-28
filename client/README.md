@@ -10,7 +10,7 @@ pnpm install
 # 执行：corepack prepare pnpm@9.15.9 --activate
 pnpm verify:api   # 对照 Swagger 验证接口（需 Server 运行在 4000）
 pnpm dev:mp-weixin          # 本地：.env.development → http://localhost:4000/api/v1
-pnpm dev:mp-weixin:prod    # 正式：.env.production → https://anchor-api.deepfate.cn/api/v1
+pnpm dev:mp-weixin:prod    # 正式：.env.production → https://anchor.hsycdianjing.com/api/v1
 pnpm build:mp-weixin:prod  # 正式包构建
 ```
 
@@ -21,11 +21,11 @@ pnpm build:mp-weixin:prod  # 正式包构建
 | 变量 / 命令 | 说明 |
 |---|---|
 | `.env.development` → `VITE_API_BASE_URL` | `http://localhost:4000/api/v1` |
-| `.env.production` → `VITE_API_BASE_URL` | `https://anchor-api.deepfate.cn/api/v1` |
+| `.env.production` → `VITE_API_BASE_URL` | `https://anchor.hsycdianjing.com/api/v1` |
 | `pnpm dev:mp-weixin:prod` | 用正式环境 API 启动微信小程序开发 |
 | `manifest.json` → `mp-weixin.appid` | 微信小程序 AppID |
 
-> 正式环境需在微信公众平台配置 request 合法域名：`https://anchor-api.deepfate.cn`
+> 正式环境需在微信公众平台配置 request 合法域名：`https://anchor.hsycdianjing.com`
 
 ## 页面结构（对齐设计稿）
 

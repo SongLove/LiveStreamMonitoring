@@ -111,6 +111,21 @@ describe('hasAvatar / extractOgImage', () => {
   });
 });
 
+describe('extractEscapedLiveAnchor', () => {
+  const { extractEscapedLiveAnchor } = require('./douyin-profile-parse');
+
+  it('reads nickname, sec_uid and avatar from escaped live SSR', () => {
+    const html =
+      '{\\"web_rid\\":\\"kelie329157\\",\\"anchor\\":{\\"sec_uid\\":\\"MS4wLjABAAAAreal\\",\\"nickname\\":\\"克烈\\",\\"avatar_thumb\\":{\\"url_list\\":[\\"https://p11.douyinpic.com/aweme/100x100/aweme-avatar/a.jpeg\\"]}}}';
+    expect(extractEscapedLiveAnchor(html, 'kelie329157')).toMatchObject({
+      nickname: '克烈',
+      secUid: 'MS4wLjABAAAAreal',
+      uniqueId: 'kelie329157',
+      avatarUrl: 'https://p11.douyinpic.com/aweme/100x100/aweme-avatar/a.jpeg',
+    });
+  });
+});
+
 describe('isIncompleteDouyinProfile', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { isIncompleteDouyinProfile } = require('./douyin-playwright.provider');

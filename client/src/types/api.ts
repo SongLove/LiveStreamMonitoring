@@ -1,6 +1,6 @@
 /** 与 Server Swagger `/docs/json` 对齐的 Client API 类型 */
 
-export type Platform = 'bilibili' | 'douyin'
+export type Platform = 'bilibili' | 'douyin' | 'kuaishou'
 export type AnchorLiveState = 'offline' | 'pending_confirm' | 'live'
 export type UserStatus = 'active' | 'banned' | 'deleting'
 export type TemplateAuthStatus = 'accept' | 'reject' | 'unknown'
@@ -189,6 +189,7 @@ export const NOTIFY_SKIP_LABELS: Record<string, string> = {
 export const PLATFORM_LABELS: Record<Platform, string> = {
   douyin: '抖音',
   bilibili: '哔哩哔哩',
+  kuaishou: '快手',
 }
 
 export const BUSINESS_ERROR_LABELS: Record<number, string> = {
