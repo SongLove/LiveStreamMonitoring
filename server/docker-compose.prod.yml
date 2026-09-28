@@ -1,0 +1,8 @@
+# 与 docker-compose.yml 叠加：镜像改为拷贝 dist，不在服务器编译 TypeScript
+services:
+  api:
+    build:
+      dockerfile: Dockerfile.runtime
+  worker:
+    build:
+      dockerfile: Dockerfile.runtime
