@@ -34,7 +34,17 @@ test -f .env || { echo "缺少 .env，先: cp .env.example .env 并填写密钥"
 export DOCKER_BUILDKIT=0
 export COMPOSE_DOCKER_CLI_BUILD=0
 
-echo "==> docker compose（运行时镜像，不编译源码）"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+IMAGE=livestream-monitoring-server:latest
+
+if [[ "${BUILD:-0}" == "1" ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "==> 构建镜像（仅首次，或 BUILD=1）"
+  "${COMPOSE[@]}" build
+else
+  echo "==> 使用已有镜像，不重新构建"
+fi
+
+echo "==> 启动容器"
+"${COMPOSE[@]}" up -d
+"${COMPOSE[@]}" ps
 echo "health: curl -s http://127.0.0.1:4000/health"

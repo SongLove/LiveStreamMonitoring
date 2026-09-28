@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractUserFromJson = extractUserFromJson;
 exports.parseDouyinProfileFromHtml = parseDouyinProfileFromHtml;
+exports.extractEscapedLiveAnchor = extractEscapedLiveAnchor;
 exports.toNormalizedProfile = toNormalizedProfile;
 exports.hasAvatar = hasAvatar;
 exports.extractOgImage = extractOgImage;
@@ -84,12 +85,23 @@ function extractUserFromJson(payload, fallbackId = '') {
 function parseDouyinProfileFromHtml(html, fallbackId = '') {
     if (!html)
         return null;
+    let loose = null;
+    const keep = (parsed) => {
+        if (!parsed?.nickname)
+            return false;
+        if (hasAvatar(parsed)) {
+            loose = parsed;
+            return true;
+        }
+        loose = loose || parsed;
+        return false;
+    };
     const nextMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
     if (nextMatch?.[1]) {
         try {
             const parsed = extractUserFromJson(JSON.parse(nextMatch[1]), fallbackId);
-            if (parsed)
-                return parsed;
+            if (keep(parsed))
+                return loose;
         }
         catch {
         }
@@ -99,8 +111,8 @@ function parseDouyinProfileFromHtml(html, fallbackId = '') {
         try {
             const decoded = decodeURIComponent(renderMatch[1].trim());
             const parsed = extractUserFromJson(JSON.parse(decoded), fallbackId);
-            if (parsed)
-                return parsed;
+            if (keep(parsed))
+                return loose;
         }
         catch {
         }
@@ -114,11 +126,39 @@ function parseDouyinProfileFromHtml(html, fallbackId = '') {
             continue;
         try {
             const parsed = extractUserFromJson(JSON.parse(body), fallbackId);
-            if (parsed)
-                return parsed;
+            if (keep(parsed))
+                return loose;
         }
         catch {
         }
+    }
+    const embedded = extractEscapedLiveAnchor(html, fallbackId);
+    if (embedded && hasAvatar(embedded))
+        return embedded;
+    return loose;
+}
+function extractEscapedLiveAnchor(html, uniqueId) {
+    const id = (uniqueId || '').trim();
+    if (!html || !id)
+        return null;
+    const safe = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [
+        new RegExp(`web_rid\\\\":\\\\"${safe}\\\\"[\\s\\S]{0,1500}?sec_uid\\\\":\\\\"([^\\\\"]+)\\\\"[\\s\\S]{0,600}?nickname\\\\":\\\\"([^\\\\"]+)\\\\"[\\s\\S]{0,800}?url_list\\\\":\\[\\\\"(https:[^\\\\"]+)`),
+        new RegExp(`"web_rid":"${safe}"[\\s\\S]{0,1500}?"sec_uid":"([^"]+)"[\\s\\S]{0,600}?"nickname":"([^"]+)"[\\s\\S]{0,800}?"url_list":\\["(https:[^"]+)`),
+    ];
+    for (const re of patterns) {
+        const m = html.match(re);
+        if (!m)
+            continue;
+        const avatarUrl = m[3].replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+        if (!/^https?:\/\//i.test(avatarUrl))
+            continue;
+        return {
+            nickname: m[2],
+            avatarUrl,
+            secUid: m[1],
+            uniqueId: id,
+        };
     }
     return null;
 }
