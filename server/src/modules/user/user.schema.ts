@@ -27,7 +27,6 @@ export class User {
       dndStart: '23:00',
       dndEnd: '08:00',
       studentMode: false,
-      largeAccountOnly: false,
       cooldownMinutes: 0,
     }),
   })
@@ -37,7 +36,6 @@ export class User {
     dndStart: string;
     dndEnd: string;
     studentMode: boolean;
-    largeAccountOnly: boolean;
     cooldownMinutes: number;
   };
 

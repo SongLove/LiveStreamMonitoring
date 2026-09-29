@@ -129,7 +129,7 @@ export class NotifyController {
       templates: {
         liveNotify: this.config.get('wechat.subscribeTemplateId'),
       },
-      features: { studentMode: true, largeAccountOnly: true },
+      features: { studentMode: true },
     };
   }
 }

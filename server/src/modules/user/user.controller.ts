@@ -29,9 +29,6 @@ export class UpdateSettingsDto {
   @ApiPropertyOptional({ description: '学生党模式（仅节假日推送）' })
   @IsOptional() @IsBoolean() studentMode?: boolean;
 
-  @ApiPropertyOptional({ description: '仅推送大号主播' })
-  @IsOptional() @IsBoolean() largeAccountOnly?: boolean;
-
   @ApiPropertyOptional({ example: 30, description: '同主播冷却分钟数' })
   @IsOptional() @IsInt() @Min(0) cooldownMinutes?: number;
 }
@@ -56,7 +53,7 @@ export class UserController {
   }
 
   @Put('settings')
-  @ApiOperation({ summary: '更新推送设置', description: '总开关、免打扰、学生党、仅大号、冷却时间' })
+  @ApiOperation({ summary: '更新推送设置', description: '总开关、免打扰、学生党、冷却时间' })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   async settings(
     @CurrentUser() user: { userId: string },

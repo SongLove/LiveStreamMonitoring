@@ -46,7 +46,6 @@ export class NotifyService {
     sessionId: string;
     anchorId: string;
     templateId: string;
-    isLargeAccount?: boolean;
   }): Promise<{ pass: boolean; reason: NotifySkipReason }> {
     const sub = await this.subscriptionService.findActive(params.userId, params.anchorId);
     if (!sub || !sub.enabled) return { pass: false, reason: 'subscription_disabled' };
@@ -61,9 +60,6 @@ export class NotifyService {
     }
     if (user.settings.studentMode && !(await this.isStudentAllowedNow())) {
       return { pass: false, reason: 'student_mode' };
-    }
-    if (user.settings.largeAccountOnly && !params.isLargeAccount) {
-      return { pass: false, reason: 'large_account_only' };
     }
     if (user.settings.cooldownMinutes > 0) {
       const since = new Date(Date.now() - user.settings.cooldownMinutes * 60_000);
@@ -145,7 +141,6 @@ export class NotifyService {
     const check = await this.validateChain({
       ...params,
       templateId,
-      isLargeAccount: (anchor.followerCount || 0) >= 100000,
     });
 
     if (!check.pass) {
@@ -181,7 +176,7 @@ export class NotifyService {
     const user = await this.userService.findById(params.userId);
     const title = this.wechatService.truncateField(anchor.nickname || '主播', 20);
     const room = this.wechatService.truncateField(anchor.liveTitle || '正在直播', 20);
-    const page = `pages/live/detail?sessionId=${params.sessionId}`;
+    const page = `pages-sub/anchor/detail?id=${params.anchorId}&sessionId=${params.sessionId}`;
 
     let log: NotifyLogDocument;
     try {

@@ -9,6 +9,7 @@ import { Subscription, SubscriptionDocument } from './subscription.schema';
 import { UserService } from '../user/user.service';
 import { AnchorService } from '../anchor/anchor.service';
 import { CategoryService } from '../category/category.service';
+import { shouldReplaceCategoryIds } from './category-ids';
 
 @Injectable()
 export class SubscriptionService {
@@ -84,7 +85,7 @@ export class SubscriptionService {
       deleted: false,
     });
     if (!sub) throw new NotFoundException('Subscription not found');
-    if (patch.categoryIds) {
+    if (shouldReplaceCategoryIds(patch.categoryIds)) {
       await this.categoryService.assertOwned(userId, patch.categoryIds);
       sub.categoryIds = patch.categoryIds.map((c) => new Types.ObjectId(c));
     }
@@ -114,12 +115,12 @@ export class SubscriptionService {
     payload: { ids: string[]; enabled?: boolean; categoryIds?: string[] },
   ) {
     if (payload.ids.length > 100) throw new BadRequestException('Batch limit 100');
-    if (payload.categoryIds) {
+    if (shouldReplaceCategoryIds(payload.categoryIds)) {
       await this.categoryService.assertOwned(userId, payload.categoryIds);
     }
     const update: Record<string, unknown> = {};
     if (payload.enabled !== undefined) update.enabled = payload.enabled;
-    if (payload.categoryIds) {
+    if (shouldReplaceCategoryIds(payload.categoryIds)) {
       update.categoryIds = payload.categoryIds.map((id) => new Types.ObjectId(id));
     }
     await this.subModel.updateMany(
