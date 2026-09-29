@@ -13,6 +13,7 @@ const bilibili_provider_1 = require("./providers/bilibili.provider");
 const kuaishou_provider_1 = require("./providers/kuaishou.provider");
 const douyin_third_party_provider_1 = require("./providers/douyin-third-party.provider");
 const douyin_signature_stub_1 = require("./providers/douyin-signature.stub");
+const douyin_web_provider_1 = require("./providers/douyin-web.provider");
 const douyin_playwright_provider_1 = require("./providers/douyin-playwright.provider");
 const douyin_browser_pool_1 = require("./providers/douyin-browser.pool");
 const provider_registry_1 = require("./provider.registry");
@@ -34,6 +35,7 @@ exports.CrawlerModule = CrawlerModule = __decorate([
             kuaishou_provider_1.KuaishouProvider,
             douyin_third_party_provider_1.DouyinThirdPartyProvider,
             douyin_signature_stub_1.DouyinSignatureStubProvider,
+            douyin_web_provider_1.DouyinWebProvider,
             douyin_browser_pool_1.DouyinBrowserPool,
             douyin_playwright_provider_1.DouyinPlaywrightProvider,
             provider_registry_1.ProviderRegistry,

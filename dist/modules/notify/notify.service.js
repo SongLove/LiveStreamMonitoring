@@ -26,6 +26,7 @@ const notify_log_schema_1 = require("./notify-log.schema");
 const user_service_1 = require("../user/user.service");
 const quota_service_1 = require("../quota/quota.service");
 const wechat_service_1 = require("../wechat/wechat.service");
+const live_notify_data_1 = require("./live-notify-data");
 const subscription_service_1 = require("../subscription/subscription.service");
 const anchor_service_1 = require("../anchor/anchor.service");
 const live_session_schema_1 = require("../live/live-session.schema");
@@ -194,11 +195,12 @@ let NotifyService = NotifyService_1 = class NotifyService {
             openid: user.openid,
             templateId,
             page,
-            data: {
-                thing1: { value: title },
-                thing2: { value: room },
-                time3: { value: new Date().toISOString().slice(0, 19).replace('T', ' ') },
-            },
+            data: (0, live_notify_data_1.buildLiveNotifyData)({
+                anchorName: title,
+                topic: room,
+                remark: '开播提醒',
+                time: (0, live_notify_data_1.formatSubscribeTime)(),
+            }),
         });
         if (result.errcode === 0) {
             log.state = 'sent';

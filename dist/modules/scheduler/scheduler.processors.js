@@ -27,6 +27,7 @@ const subscription_service_1 = require("../subscription/subscription.service");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const anchor_schema_1 = require("../anchor/anchor.schema");
+const douyin_input_1 = require("../crawler/providers/douyin-input");
 const quota_ledger_schema_1 = require("../quota/quota-ledger.schema");
 const user_quota_schema_1 = require("../quota/user-quota.schema");
 const TIER_INTERVAL_MS = {
@@ -121,16 +122,33 @@ let PollExecuteProcessor = PollExecuteProcessor_1 = class PollExecuteProcessor e
     async process(job) {
         const { platform, anchorIds } = job.data;
         const anchors = await this.anchorModel.find({ _id: { $in: anchorIds } });
-        const uids = anchors.map((a) => platform === 'douyin' && a.roomId ? a.roomId : a.platformUid);
+        const queued = [];
+        for (const a of anchors) {
+            const probeId = platform === 'douyin'
+                ? (0, douyin_input_1.douyinLiveWebRid)({ roomId: a.roomId, platformUid: a.platformUid })
+                : a.platformUid;
+            if (!probeId) {
+                a.lastPolledAt = new Date(Date.now() + PROBE_FAIL_RETRY_MS);
+                await a.save();
+                await this.liveService.applyProbeResult(String(a._id), 'probe_failed', {
+                    provider: 'none',
+                    confidence: 0,
+                });
+                continue;
+            }
+            queued.push({ anchor: a, probeId });
+        }
+        if (!queued.length)
+            return;
+        const uids = queued.map((item) => item.probeId);
         const { results, deferred, allFailed } = await this.crawler.fetchStatuses(platform, uids);
         if (deferred) {
             await this.pollExecute.add('execute', job.data, { delay: 2000 });
             return;
         }
         const byUid = new Map(results.map((r) => [r.platformUid, r]));
-        for (const a of anchors) {
-            const r = byUid.get(a.platformUid) ||
-                (a.roomId ? byUid.get(a.roomId) : undefined);
+        for (const { anchor: a, probeId } of queued) {
+            const r = byUid.get(probeId);
             const status = r?.status ?? 'probe_failed';
             const failed = allFailed || status === 'probe_failed' || !r;
             const interval = failed
@@ -172,9 +190,11 @@ let PollConfirmProcessor = class PollConfirmProcessor extends bullmq_1.WorkerHos
         const anchor = await this.anchorModel.findById(job.data.anchorId);
         if (!anchor)
             return;
-        const probeId = anchor.platform === 'douyin' && anchor.roomId
-            ? anchor.roomId
+        const probeId = anchor.platform === 'douyin'
+            ? (0, douyin_input_1.douyinLiveWebRid)({ roomId: anchor.roomId, platformUid: anchor.platformUid })
             : anchor.platformUid;
+        if (!probeId)
+            return;
         const { results, allFailed } = await this.crawler.fetchStatuses(anchor.platform, [
             probeId,
         ]);

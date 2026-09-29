@@ -17,6 +17,7 @@ const openapi = require("@nestjs/swagger");
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const swagger_2 = require("@nestjs/swagger");
+const class_validator_1 = require("class-validator");
 const throttler_1 = require("@nestjs/throttler");
 const current_user_decorator_1 = require("../../common/decorators/current-user.decorator");
 const jwt_client_guard_1 = require("../../common/guards/jwt-client.guard");
@@ -26,11 +27,14 @@ const wechat_service_1 = require("../wechat/wechat.service");
 const user_service_1 = require("../user/user.service");
 const quota_service_1 = require("../quota/quota.service");
 const api_response_dto_1 = require("../../common/swagger/api-response.dto");
+const live_notify_data_1 = require("./live-notify-data");
 class NotifyTestDto {
 }
 exports.NotifyTestDto = NotifyTestDto;
 __decorate([
     (0, swagger_2.ApiPropertyOptional)({ example: '测试开播提醒', description: '模板 thing 字段内容' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], NotifyTestDto.prototype, "message", void 0);
 let NotifyController = class NotifyController {
@@ -59,11 +63,12 @@ let NotifyController = class NotifyController {
             openid: u.openid,
             templateId,
             page: 'pages/index/index',
-            data: {
-                thing1: { value: this.wechatService.truncateField(body.message || '测试开播提醒') },
-                thing2: { value: '测试直播间' },
-                time3: { value: new Date().toISOString().slice(0, 19).replace('T', ' ') },
-            },
+            data: (0, live_notify_data_1.buildLiveNotifyData)({
+                anchorName: this.wechatService.truncateField(body.message || '测试主播'),
+                topic: '测试直播',
+                remark: '测试推送',
+                time: (0, live_notify_data_1.formatSubscribeTime)(),
+            }),
         });
         if (result.errcode !== 0 && this.wechatService.shouldRefundError(result.errcode)) {
             await this.quotaService.refund(user.userId, `refund:test:${deductKey}`, 'test_fail');

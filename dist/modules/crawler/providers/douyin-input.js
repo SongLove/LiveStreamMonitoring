@@ -4,6 +4,7 @@ exports.isDouyinUniqueId = isDouyinUniqueId;
 exports.isDouyinSecUid = isDouyinSecUid;
 exports.looksLikeDouyinUserId = looksLikeDouyinUserId;
 exports.parseDouyinInput = parseDouyinInput;
+exports.douyinLiveWebRid = douyinLiveWebRid;
 exports.assertDouyinUserId = assertDouyinUserId;
 exports.assertStableDouyinUid = assertStableDouyinUid;
 const common_1 = require("@nestjs/common");
@@ -69,6 +70,15 @@ function safeDecode(s) {
     catch {
         return s.trim();
     }
+}
+function douyinLiveWebRid(anchor) {
+    const roomId = String(anchor.roomId || '').trim();
+    if (isDouyinUniqueId(roomId))
+        return roomId;
+    const platformUid = String(anchor.platformUid || '').trim();
+    if (isDouyinUniqueId(platformUid))
+        return platformUid;
+    return '';
 }
 function assertDouyinUserId(uid) {
     if (!looksLikeDouyinUserId(uid)) {

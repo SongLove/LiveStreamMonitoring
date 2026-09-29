@@ -15,13 +15,15 @@ const bilibili_provider_1 = require("./providers/bilibili.provider");
 const kuaishou_provider_1 = require("./providers/kuaishou.provider");
 const douyin_third_party_provider_1 = require("./providers/douyin-third-party.provider");
 const douyin_signature_stub_1 = require("./providers/douyin-signature.stub");
+const douyin_web_provider_1 = require("./providers/douyin-web.provider");
 const douyin_playwright_provider_1 = require("./providers/douyin-playwright.provider");
 let ProviderRegistry = class ProviderRegistry {
-    constructor(bilibili, kuaishou, douyinThird, douyinSign, douyinPw) {
+    constructor(bilibili, kuaishou, douyinThird, douyinSign, douyinWeb, douyinPw) {
         this.bilibili = bilibili;
         this.kuaishou = kuaishou;
         this.douyinThird = douyinThird;
         this.douyinSign = douyinSign;
+        this.douyinWeb = douyinWeb;
         this.douyinPw = douyinPw;
     }
     primary(platform) {
@@ -36,7 +38,7 @@ let ProviderRegistry = class ProviderRegistry {
             return [this.bilibili];
         if (platform === 'kuaishou')
             return [this.kuaishou];
-        return [this.douyinThird, this.douyinSign, this.douyinPw];
+        return [this.douyinThird, this.douyinSign, this.douyinWeb, this.douyinPw];
     }
     async healthSummary() {
         const providers = [
@@ -44,6 +46,7 @@ let ProviderRegistry = class ProviderRegistry {
             this.kuaishou,
             this.douyinThird,
             this.douyinSign,
+            this.douyinWeb,
             this.douyinPw,
         ];
         const items = [];
@@ -61,6 +64,7 @@ exports.ProviderRegistry = ProviderRegistry = __decorate([
         kuaishou_provider_1.KuaishouProvider,
         douyin_third_party_provider_1.DouyinThirdPartyProvider,
         douyin_signature_stub_1.DouyinSignatureStubProvider,
+        douyin_web_provider_1.DouyinWebProvider,
         douyin_playwright_provider_1.DouyinPlaywrightProvider])
 ], ProviderRegistry);
 //# sourceMappingURL=provider.registry.js.map

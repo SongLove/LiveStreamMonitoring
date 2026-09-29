@@ -16,5 +16,9 @@ export declare function isDouyinUniqueId(raw: string): boolean;
 export declare function isDouyinSecUid(raw: string): boolean;
 export declare function looksLikeDouyinUserId(raw: string): boolean;
 export declare function parseDouyinInput(raw: string): DouyinInputKind;
+export declare function douyinLiveWebRid(anchor: {
+    roomId?: string;
+    platformUid?: string;
+}): string;
 export declare function assertDouyinUserId(uid: string): void;
 export declare function assertStableDouyinUid(uid: string): void;
