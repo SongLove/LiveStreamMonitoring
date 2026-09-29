@@ -93,6 +93,18 @@ function safeDecode(s: string): string {
   }
 }
 
+/** 直播间 web_rid 只能是抖音号。昵称和 sec_uid 打开 live.douyin.com 会超时。 */
+export function douyinLiveWebRid(anchor: {
+  roomId?: string;
+  platformUid?: string;
+}): string {
+  const roomId = String(anchor.roomId || '').trim();
+  if (isDouyinUniqueId(roomId)) return roomId;
+  const platformUid = String(anchor.platformUid || '').trim();
+  if (isDouyinUniqueId(platformUid)) return platformUid;
+  return '';
+}
+
 export function assertDouyinUserId(uid: string): void {
   if (!looksLikeDouyinUserId(uid)) {
     throw new BadRequestException(

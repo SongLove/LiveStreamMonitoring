@@ -4,6 +4,7 @@ import { BilibiliProvider } from './providers/bilibili.provider';
 import { KuaishouProvider } from './providers/kuaishou.provider';
 import { DouyinThirdPartyProvider } from './providers/douyin-third-party.provider';
 import { DouyinSignatureStubProvider } from './providers/douyin-signature.stub';
+import { DouyinWebProvider } from './providers/douyin-web.provider';
 import { DouyinPlaywrightProvider } from './providers/douyin-playwright.provider';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class ProviderRegistry {
     private readonly kuaishou: KuaishouProvider,
     private readonly douyinThird: DouyinThirdPartyProvider,
     private readonly douyinSign: DouyinSignatureStubProvider,
+    private readonly douyinWeb: DouyinWebProvider,
     private readonly douyinPw: DouyinPlaywrightProvider,
   ) {}
 
@@ -26,7 +28,7 @@ export class ProviderRegistry {
   chain(platform: Platform): LiveProvider[] {
     if (platform === 'bilibili') return [this.bilibili];
     if (platform === 'kuaishou') return [this.kuaishou];
-    return [this.douyinThird, this.douyinSign, this.douyinPw];
+    return [this.douyinThird, this.douyinSign, this.douyinWeb, this.douyinPw];
   }
 
   async healthSummary() {
@@ -35,6 +37,7 @@ export class ProviderRegistry {
       this.kuaishou,
       this.douyinThird,
       this.douyinSign,
+      this.douyinWeb,
       this.douyinPw,
     ];
     const items: Array<{

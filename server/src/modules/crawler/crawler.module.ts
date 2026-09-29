@@ -4,6 +4,7 @@ import { BilibiliProvider } from './providers/bilibili.provider';
 import { KuaishouProvider } from './providers/kuaishou.provider';
 import { DouyinThirdPartyProvider } from './providers/douyin-third-party.provider';
 import { DouyinSignatureStubProvider } from './providers/douyin-signature.stub';
+import { DouyinWebProvider } from './providers/douyin-web.provider';
 import { DouyinPlaywrightProvider } from './providers/douyin-playwright.provider';
 import { DouyinBrowserPool } from './providers/douyin-browser.pool';
 import { ProviderRegistry } from './provider.registry';
@@ -22,6 +23,7 @@ import { PlatformConfig, PlatformConfigSchema } from './platform-config.schema';
     KuaishouProvider,
     DouyinThirdPartyProvider,
     DouyinSignatureStubProvider,
+    DouyinWebProvider,
     DouyinBrowserPool,
     DouyinPlaywrightProvider,
     ProviderRegistry,

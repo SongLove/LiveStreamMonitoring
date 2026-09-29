@@ -7,6 +7,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtClientGuard } from '../../common/guards/jwt-client.guard';
@@ -16,9 +17,12 @@ import { WechatService } from '../wechat/wechat.service';
 import { UserService } from '../user/user.service';
 import { QuotaService } from '../quota/quota.service';
 import { ApiResponseDto } from '../../common/swagger/api-response.dto';
+import { buildLiveNotifyData, formatSubscribeTime } from './live-notify-data';
 
 export class NotifyTestDto {
   @ApiPropertyOptional({ example: '测试开播提醒', description: '模板 thing 字段内容' })
+  @IsOptional()
+  @IsString()
   message?: string;
 }
 
@@ -74,11 +78,12 @@ export class NotifyController {
       openid: u.openid,
       templateId,
       page: 'pages/index/index',
-      data: {
-        thing1: { value: this.wechatService.truncateField(body.message || '测试开播提醒') },
-        thing2: { value: '测试直播间' },
-        time3: { value: new Date().toISOString().slice(0, 19).replace('T', ' ') },
-      },
+      data: buildLiveNotifyData({
+        anchorName: this.wechatService.truncateField(body.message || '测试主播'),
+        topic: '测试直播',
+        remark: '测试推送',
+        time: formatSubscribeTime(),
+      }),
     });
     if (result.errcode !== 0 && this.wechatService.shouldRefundError(result.errcode)) {
       await this.quotaService.refund(user.userId, `refund:test:${deductKey}`, 'test_fail');

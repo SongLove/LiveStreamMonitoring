@@ -11,6 +11,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Anchor, AnchorDocument } from '../anchor/anchor.schema';
+import { douyinLiveWebRid } from '../crawler/providers/douyin-input';
 import { QuotaLedger, QuotaLedgerDocument } from '../quota/quota-ledger.schema';
 import { UserQuota, UserQuotaDocument } from '../quota/user-quota.schema';
 
@@ -117,10 +118,25 @@ export class PollExecuteProcessor extends WorkerHost {
   async process(job: Job<{ platform: string; anchorIds: string[] }>): Promise<void> {
     const { platform, anchorIds } = job.data;
     const anchors = await this.anchorModel.find({ _id: { $in: anchorIds } });
-    // 抖音探测用 roomId（抖音号）；platformUid 多为 sec_uid，live.douyin.com 认前者
-    const uids = anchors.map((a) =>
-      platform === 'douyin' && a.roomId ? a.roomId : a.platformUid,
-    );
+    const queued: { anchor: AnchorDocument; probeId: string }[] = [];
+    for (const a of anchors) {
+      const probeId =
+        platform === 'douyin'
+          ? douyinLiveWebRid({ roomId: a.roomId, platformUid: a.platformUid })
+          : a.platformUid;
+      if (!probeId) {
+        a.lastPolledAt = new Date(Date.now() + PROBE_FAIL_RETRY_MS);
+        await a.save();
+        await this.liveService.applyProbeResult(String(a._id), 'probe_failed', {
+          provider: 'none',
+          confidence: 0,
+        });
+        continue;
+      }
+      queued.push({ anchor: a, probeId });
+    }
+    if (!queued.length) return;
+    const uids = queued.map((item) => item.probeId);
     const { results, deferred, allFailed } = await this.crawler.fetchStatuses(
       platform as any,
       uids,
@@ -130,10 +146,8 @@ export class PollExecuteProcessor extends WorkerHost {
       return;
     }
     const byUid = new Map(results.map((r) => [r.platformUid, r]));
-    for (const a of anchors) {
-      const r =
-        byUid.get(a.platformUid) ||
-        (a.roomId ? byUid.get(a.roomId) : undefined);
+    for (const { anchor: a, probeId } of queued) {
+      const r = byUid.get(probeId);
       const status = r?.status ?? 'probe_failed';
       const failed = allFailed || status === 'probe_failed' || !r;
       const interval = failed
@@ -171,9 +185,10 @@ export class PollConfirmProcessor extends WorkerHost {
     const anchor = await this.anchorModel.findById(job.data.anchorId);
     if (!anchor) return;
     const probeId =
-      anchor.platform === 'douyin' && anchor.roomId
-        ? anchor.roomId
+      anchor.platform === 'douyin'
+        ? douyinLiveWebRid({ roomId: anchor.roomId, platformUid: anchor.platformUid })
         : anchor.platformUid;
+    if (!probeId) return;
     const { results, allFailed } = await this.crawler.fetchStatuses(anchor.platform, [
       probeId,
     ]);

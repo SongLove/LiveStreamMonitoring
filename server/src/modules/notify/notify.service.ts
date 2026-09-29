@@ -7,6 +7,7 @@ import { NotifyLog, NotifyLogDocument } from './notify-log.schema';
 import { UserService } from '../user/user.service';
 import { QuotaService } from '../quota/quota.service';
 import { WechatService } from '../wechat/wechat.service';
+import { buildLiveNotifyData, formatSubscribeTime } from './live-notify-data';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { AnchorService } from '../anchor/anchor.service';
 import { LiveSession, LiveSessionDocument } from '../live/live-session.schema';
@@ -204,11 +205,12 @@ export class NotifyService {
       openid: user.openid,
       templateId,
       page,
-      data: {
-        thing1: { value: title },
-        thing2: { value: room },
-        time3: { value: new Date().toISOString().slice(0, 19).replace('T', ' ') },
-      },
+      data: buildLiveNotifyData({
+        anchorName: title,
+        topic: room,
+        remark: '开播提醒',
+        time: formatSubscribeTime(),
+      }),
     });
 
     if (result.errcode === 0) {
