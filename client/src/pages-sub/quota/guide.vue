@@ -1,21 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useSubscribeMessage } from '@/composables/useSubscribe'
 import { useProfileStore } from '@/stores/profile'
 
 const profileStore = useProfileStore()
 const { requestSubscribe } = useSubscribeMessage()
-const loading = ref(false)
 
-async function onAuthorize() {
-  loading.value = true
-  try {
-    await requestSubscribe()
-    await profileStore.fetchProfile()
-  } finally {
-    loading.value = false
-  }
+function onAuthorize() {
+  requestSubscribe()
 }
 
 onLoad(async () => {
@@ -39,7 +31,7 @@ onLoad(async () => {
       <text class="rules-item">· 不承诺绝对送达，受微信与网络影响</text>
     </view>
 
-    <button class="btn-primary auth-btn" :loading="loading" @tap="onAuthorize">
+    <button class="btn-primary auth-btn" @tap="onAuthorize">
       点击授权增加 1 次
     </button>
   </view>

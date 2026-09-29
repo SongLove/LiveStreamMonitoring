@@ -1,23 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useSubscribeMessage } from '@/composables/useSubscribe'
 import { useProfileStore } from '@/stores/profile'
 
 const profileStore = useProfileStore()
 const { requestSubscribe } = useSubscribeMessage()
-const loading = ref(false)
 
 defineProps<{ showMasterSwitch?: boolean }>()
 const emit = defineEmits<{ 'update:notifyEnabled': [v: boolean] }>()
 
-async function onIncrease() {
-  if (loading.value) return
-  loading.value = true
-  try {
-    await requestSubscribe()
-  } finally {
-    loading.value = false
-  }
+function onIncrease() {
+  requestSubscribe()
 }
 
 function goFix() {
@@ -53,7 +45,7 @@ function goFix() {
       <text class="warn-sub">开播提醒 未授权，点击修复 ›</text>
     </view>
 
-    <button class="btn-primary increase-btn" :loading="loading" @tap="onIncrease">
+    <button class="btn-primary increase-btn" @tap="onIncrease">
       + 增加推送次数
     </button>
   </view>
