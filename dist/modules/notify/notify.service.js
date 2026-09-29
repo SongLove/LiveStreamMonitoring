@@ -59,9 +59,6 @@ let NotifyService = NotifyService_1 = class NotifyService {
         if (user.settings.studentMode && !(await this.isStudentAllowedNow())) {
             return { pass: false, reason: 'student_mode' };
         }
-        if (user.settings.largeAccountOnly && !params.isLargeAccount) {
-            return { pass: false, reason: 'large_account_only' };
-        }
         if (user.settings.cooldownMinutes > 0) {
             const since = new Date(Date.now() - user.settings.cooldownMinutes * 60_000);
             const recent = await this.notifyLogModel.findOne({
@@ -137,7 +134,6 @@ let NotifyService = NotifyService_1 = class NotifyService {
         const check = await this.validateChain({
             ...params,
             templateId,
-            isLargeAccount: (anchor.followerCount || 0) >= 100000,
         });
         if (!check.pass) {
             try {
@@ -172,7 +168,7 @@ let NotifyService = NotifyService_1 = class NotifyService {
         const user = await this.userService.findById(params.userId);
         const title = this.wechatService.truncateField(anchor.nickname || '主播', 20);
         const room = this.wechatService.truncateField(anchor.liveTitle || '正在直播', 20);
-        const page = `pages/live/detail?sessionId=${params.sessionId}`;
+        const page = `pages-sub/anchor/detail?id=${params.anchorId}&sessionId=${params.sessionId}`;
         let log;
         try {
             log = await this.notifyLogModel.create({

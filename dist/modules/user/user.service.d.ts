@@ -15,7 +15,6 @@ export declare class UserService {
             dndStart: string;
             dndEnd: string;
             studentMode: boolean;
-            largeAccountOnly: boolean;
             cooldownMinutes: number;
         };
         templateAuth: Record<string, "accept" | "reject" | "unknown">;
@@ -27,7 +26,6 @@ export declare class UserService {
         dndStart: string;
         dndEnd: string;
         studentMode: boolean;
-        largeAccountOnly: boolean;
         cooldownMinutes: number;
     }>;
     assertCanWrite(userId: string): Promise<import("mongoose").Document<unknown, {}, User, {}, import("mongoose").DefaultSchemaOptions> & User & {

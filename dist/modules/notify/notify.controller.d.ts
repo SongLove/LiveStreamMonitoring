@@ -67,7 +67,6 @@ export declare class NotifyController {
         };
         features: {
             studentMode: boolean;
-            largeAccountOnly: boolean;
         };
     };
 }

@@ -6,7 +6,6 @@ export declare class UpdateSettingsDto {
     dndStart?: string;
     dndEnd?: string;
     studentMode?: boolean;
-    largeAccountOnly?: boolean;
     cooldownMinutes?: number;
 }
 export declare class UserController {
@@ -30,7 +29,6 @@ export declare class UserController {
             dndStart: string;
             dndEnd: string;
             studentMode: boolean;
-            largeAccountOnly: boolean;
             cooldownMinutes: number;
         };
         templateAuth: Record<string, "accept" | "reject" | "unknown">;
@@ -44,7 +42,6 @@ export declare class UserController {
         dndStart: string;
         dndEnd: string;
         studentMode: boolean;
-        largeAccountOnly: boolean;
         cooldownMinutes: number;
     }>;
 }

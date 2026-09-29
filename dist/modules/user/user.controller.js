@@ -57,12 +57,6 @@ __decorate([
     __metadata("design:type", Boolean)
 ], UpdateSettingsDto.prototype, "studentMode", void 0);
 __decorate([
-    (0, swagger_2.ApiPropertyOptional)({ description: '仅推送大号主播' }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsBoolean)(),
-    __metadata("design:type", Boolean)
-], UpdateSettingsDto.prototype, "largeAccountOnly", void 0);
-__decorate([
     (0, swagger_2.ApiPropertyOptional)({ example: 30, description: '同主播冷却分钟数' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsInt)(),
@@ -95,7 +89,7 @@ __decorate([
 ], UserController.prototype, "profile", null);
 __decorate([
     (0, common_1.Put)('settings'),
-    (0, swagger_1.ApiOperation)({ summary: '更新推送设置', description: '总开关、免打扰、学生党、仅大号、冷却时间' }),
+    (0, swagger_1.ApiOperation)({ summary: '更新推送设置', description: '总开关、免打扰、学生党、冷却时间' }),
     (0, swagger_1.ApiResponse)({ status: 200, type: api_response_dto_1.ApiResponseDto }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),

@@ -12,7 +12,6 @@ export declare class User {
         dndStart: string;
         dndEnd: string;
         studentMode: boolean;
-        largeAccountOnly: boolean;
         cooldownMinutes: number;
     };
     templateAuth: Record<string, 'accept' | 'reject' | 'unknown'>;
@@ -69,7 +68,6 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
         dndStart: string;
         dndEnd: string;
         studentMode: boolean;
-        largeAccountOnly: boolean;
         cooldownMinutes: number;
     }, User, import("mongoose").Document<unknown, {}, User, {
         id: string;

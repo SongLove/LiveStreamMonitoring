@@ -25,7 +25,6 @@ export declare class NotifyService {
         sessionId: string;
         anchorId: string;
         templateId: string;
-        isLargeAccount?: boolean;
     }): Promise<{
         pass: boolean;
         reason: NotifySkipReason;

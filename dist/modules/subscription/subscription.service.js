@@ -20,6 +20,7 @@ const subscription_schema_1 = require("./subscription.schema");
 const user_service_1 = require("../user/user.service");
 const anchor_service_1 = require("../anchor/anchor.service");
 const category_service_1 = require("../category/category.service");
+const category_ids_1 = require("./category-ids");
 let SubscriptionService = class SubscriptionService {
     constructor(subModel, userService, anchorService, categoryService) {
         this.subModel = subModel;
@@ -83,7 +84,7 @@ let SubscriptionService = class SubscriptionService {
         });
         if (!sub)
             throw new common_1.NotFoundException('Subscription not found');
-        if (patch.categoryIds) {
+        if ((0, category_ids_1.shouldReplaceCategoryIds)(patch.categoryIds)) {
             await this.categoryService.assertOwned(userId, patch.categoryIds);
             sub.categoryIds = patch.categoryIds.map((c) => new mongoose_2.Types.ObjectId(c));
         }
@@ -113,13 +114,13 @@ let SubscriptionService = class SubscriptionService {
     async batch(userId, payload) {
         if (payload.ids.length > 100)
             throw new common_1.BadRequestException('Batch limit 100');
-        if (payload.categoryIds) {
+        if ((0, category_ids_1.shouldReplaceCategoryIds)(payload.categoryIds)) {
             await this.categoryService.assertOwned(userId, payload.categoryIds);
         }
         const update = {};
         if (payload.enabled !== undefined)
             update.enabled = payload.enabled;
-        if (payload.categoryIds) {
+        if ((0, category_ids_1.shouldReplaceCategoryIds)(payload.categoryIds)) {
             update.categoryIds = payload.categoryIds.map((id) => new mongoose_2.Types.ObjectId(id));
         }
         await this.subModel.updateMany({
